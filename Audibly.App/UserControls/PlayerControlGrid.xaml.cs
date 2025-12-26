@@ -1,7 +1,9 @@
 // Author: rstewa · https://github.com/rstewa
-// Updated: 08/02/2025
+// Updated: 12/26/2025
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Audibly.App.Extensions;
 using Audibly.App.Helpers;
 using Audibly.App.ViewModels;
@@ -10,7 +12,10 @@ using Audibly.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
 using Constants = Audibly.App.Helpers.Constants;
+using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 
 namespace Audibly.App.UserControls;
 
@@ -20,10 +25,33 @@ public sealed partial class PlayerControlGrid : UserControl
         DependencyProperty.Register(nameof(ShowCoverImage), typeof(bool), typeof(PlayerControlGrid),
             new PropertyMetadata(true));
 
+    private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    private CancellationTokenSource? _playbackSpeedFlyoutCts;
+
     public PlayerControlGrid()
     {
         InitializeComponent();
         AudioPlayer.SetMediaPlayer(PlayerViewModel.MediaPlayer);
+
+        // allow '[' ']' and '\' to work while the playback-speed flyout is open
+        if (PlaybackSpeedSlider != null)
+            PlaybackSpeedSlider.KeyDown += PlaybackSpeedSlider_KeyDown;
+
+        // ensure any flyout opened via button still focuses the slider
+        if (PlaybackSpeedButton?.Flyout is Flyout f)
+            f.Opened += (_, _) => PlaybackSpeedSlider?.Focus(FocusState.Programmatic);
+
+        // Handle global keys for Now Playing view (only enable focus/focus capture when we are on PlayerPage)
+        KeyDown += PlayerControlGrid_KeyDown;
+        Loaded += (_, _) =>
+        {
+            // Only try to take focus when in the Now Playing page so we don't steal focus elsewhere
+            if (App.RootFrame?.Content is PlayerPage)
+            {
+                IsTabStop = true;
+                Focus(FocusState.Programmatic);
+            }
+        };
     }
 
     /// <summary>
@@ -165,5 +193,118 @@ public sealed partial class PlayerControlGrid : UserControl
         timerDuration = timerDuration.ToSeconds().ToInt();
 
         if (timerDuration > 0) PlayerViewModel.SetTimer(timerDuration);
+    }
+
+    // Public API used by AppShell to adjust speed via '[' and ']'
+    public void IncreasePlaybackSpeed()
+    {
+        ShowPlaybackSpeedFlyout();
+        var newValue = PlaybackSpeedSlider.Value + Constants.PlaybackSpeedIncrement;
+        if (newValue >= Constants.PlaybackSpeedMaximum) newValue = Constants.PlaybackSpeedMaximum;
+        PlaybackSpeedSlider.Value = newValue;
+    }
+
+    public void DecreasePlaybackSpeed()
+    {
+        ShowPlaybackSpeedFlyout();
+        var newValue = PlaybackSpeedSlider.Value - Constants.PlaybackSpeedIncrement;
+        if (newValue <= Constants.PlaybackSpeedMinimum) newValue = Constants.PlaybackSpeedMinimum;
+        PlaybackSpeedSlider.Value = newValue;
+    }
+
+    public void ResetPlaybackSpeed()
+    {
+        ShowPlaybackSpeedFlyout();
+        PlaybackSpeedSlider.Value = Constants.PlaybackSpeedDefault;
+    }
+
+    private void ShowPlaybackSpeedFlyout()
+    {
+        if (PlaybackSpeedButton?.Flyout is Flyout flyout)
+        {
+            flyout.ShowAt(PlaybackSpeedButton);
+            // focus slider so keyboard interactions (if any) go there
+            PlaybackSpeedSlider.Focus(FocusState.Programmatic);
+            ClosePlaybackSpeedFlyout();
+        }
+    }
+
+    private void ClosePlaybackSpeedFlyout()
+    {
+        // Cancel any previous close operation
+        _playbackSpeedFlyoutCts?.Cancel();
+        _playbackSpeedFlyoutCts = new CancellationTokenSource();
+        var token = _playbackSpeedFlyoutCts.Token;
+
+        _dispatcherQueue.TryEnqueue(async () =>
+        {
+            try
+            {
+                await Task.Delay(2000, token);
+                if (PlaybackSpeedButton?.Flyout is Flyout flyout && flyout.IsOpen)
+                    flyout.Hide();
+            }
+            catch (TaskCanceledException)
+            {
+                // ignore
+            }
+        });
+    }
+
+    // Handle bracket keys while the slider has focus (flyout open)
+    private void PlaybackSpeedSlider_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        var key = e.Key;
+        if (key == (VirtualKey)219) // '['
+        {
+            DecreasePlaybackSpeed();
+            e.Handled = true;
+        }
+        else if (key == (VirtualKey)221) // ']'
+        {
+            IncreasePlaybackSpeed();
+            e.Handled = true;
+        }
+        else if (key == (VirtualKey)0xDC) // backslash '\'
+        {
+            ResetPlaybackSpeed();
+            e.Handled = true;
+        }
+    }
+
+    // Capture Up/Down and bracket/backslash in the Now Playing view and show the same slider as mini-player
+    private void PlayerControlGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        var key = e.Key;
+        if (key == (VirtualKey)219) // Open bracket '['
+        {
+            DecreasePlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            e.Handled = true;
+        }
+        else if (key == (VirtualKey)221) // Close bracket ']'
+        {
+            IncreasePlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            e.Handled = true;
+        }
+        else if (key == (VirtualKey)0xDC) // Backslash '\'
+        {
+            ResetPlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            e.Handled = true;
+        }
+        else if (key == VirtualKey.Up) // Increase speed with Up arrow
+        {
+            IncreasePlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            e.Handled = true;
+        }
+        else if (key == VirtualKey.Down) // Decrease speed with Down arrow
+        {
+            DecreasePlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            e.Handled = true;
+        }
     }
 }

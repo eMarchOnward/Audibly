@@ -1,5 +1,5 @@
 // Author: rstewa · https://github.com/rstewa
-// Updated: 07/30/2025
+// Updated: 12/26/2025
 
 using System;
 using System.Threading;
@@ -63,6 +63,18 @@ public sealed partial class NewMiniPlayerPage : Page
         else if (key == (VirtualKey)0xDC) // Backslash '\'
         {
             ResetPlaybackSpeed();
+            ClosePlaybackSpeedFlyout();
+            args.Handled = true;
+        }
+        else if (key == VirtualKey.Up) // Increase speed with Up arrow
+        {
+            HandleSpeedIncrease();
+            ClosePlaybackSpeedFlyout();
+            args.Handled = true;
+        }
+        else if (key == VirtualKey.Down) // Decrease speed with Down arrow
+        {
+            HandleSpeedDecrease();
             ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }

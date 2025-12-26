@@ -140,7 +140,8 @@
                     RelativePanel.AlignLeftWithPanel="True"
                     RelativePanel.AlignRightWithPanel="True">
 
-                    <userControls:PlayerControlGrid />
+                    <!-- Named so the shell can call Increase/Decrease/Reset -->
+                    <userControls:PlayerControlGrid x:Name="PlayerControl" />
 
                 </Grid>
 
