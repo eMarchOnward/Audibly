@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -960,7 +961,7 @@ public class MainViewModel : BindableBase
 
     #endregion
 
-    # region File Import Operations
+    #region File Import Operations
 
     public async void ImportAudiobookAsync()
     {
@@ -1369,6 +1370,96 @@ public class MainViewModel : BindableBase
         LoggingService.Log($"Imported {totalBooks} audiobooks in {stopwatch.Elapsed} seconds.");
     }
 
+    /// <summary>
+    /// Import all audio files in the specified folder (top-level, non-recursive) as a single audiobook
+    /// (i.e. an audiobook made up of multiple files).
+    /// </summary>
+    /// <param name="folderPath">Path to the folder containing audiobook files.</param>
+    public async Task ImportAudiobookFromFolderAsync(string folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath)) return;
+
+        // gather top-level audio files (.m4b, .mp3)
+        string[] filesArray;
+        try
+        {
+            filesArray = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(f => f.EndsWith(".m4b", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f)
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError(ex, true);
+            EnqueueNotification(new Notification { Message = "Failed to read folder contents.", Severity = InfoBarSeverity.Error });
+            return;
+        }
+
+        if (filesArray.Length == 0)
+        {
+            EnqueueNotification(new Notification { Message = "No audio files found in folder.", Severity = InfoBarSeverity.Warning });
+            return;
+        }
+
+        await _dispatcherQueue.EnqueueAsync(() => IsLoading = true);
+
+        _cancellationTokenSource = new CancellationTokenSource();
+        var token = _cancellationTokenSource.Token;
+
+        UpdateProgressDialogProperties(ProgressDialogPrefix = "Importing");
+
+        var totalBooks = 0;
+        var failedBooks = 0;
+
+        Stopwatch stopwatch = new();
+        stopwatch.Start();
+        try
+        {
+            // show progress dialog
+            await DialogService.ShowProgressDialogAsync("Importing Audiobooks", _cancellationTokenSource);
+
+            async Task ProgressCallback(int progress, int total, string title, bool didFail)
+            {
+                await _dispatcherQueue.EnqueueAsync(() =>
+                {
+                    totalBooks++;
+                    ProgressDialogProgress = ((double)progress / total * 100).ToInt();
+                    ProgressDialogPrefix = "Importing";
+                    ProgressDialogText = title;
+                    ProgressDialogTotalText = $"{progress} of {total}";
+                });
+
+                if (didFail)
+                {
+                    totalBooks--;
+                    failedBooks++;
+                    EnqueueNotification(new Notification { Message = $"Failed to import {title}!", Severity = InfoBarSeverity.Error });
+                }
+            }
+
+            await FileImporter.ImportFromMultipleFilesAsync(filesArray, token, ProgressCallback);
+        }
+        catch (OperationCanceledException)
+        {
+            EnqueueNotification(new Notification { Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning });
+        }
+        catch (Exception ex)
+        {
+            EnqueueNotification(new Notification { Message = "Failed to import audiobook from folder!", Severity = InfoBarSeverity.Error });
+            LoggingService.LogError(ex, true);
+        }
+
+        await DialogService.CloseProgressDialogAsync();
+
+        if (failedBooks == 0)
+            EnqueueNotification(new Notification { Message = $"{totalBooks} Audiobooks imported successfully!", Severity = InfoBarSeverity.Success });
+
+        await GetAudiobookListAsync();
+
+        stopwatch.Stop();
+        LoggingService.Log($"Imported {totalBooks} Audiobooks from folder in {stopwatch.Elapsed} seconds.");
+    }
     #endregion
 }
 

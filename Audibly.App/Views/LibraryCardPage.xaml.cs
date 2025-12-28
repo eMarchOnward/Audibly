@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.Storage;
 using Windows.UI;
+using Windows.ApplicationModel.DataTransfer;
 using Audibly.App.Helpers;
 using Audibly.App.Services;
 using Audibly.App.ViewModels;
@@ -282,6 +284,57 @@ public sealed partial class LibraryCardPage : Page
         if (InProgressFilterCheckBox.IsChecked == true && NotStartedFilterCheckBox.IsChecked == true &&
             CompletedFilterCheckBox.IsChecked == true)
             SelectAllFiltersCheckBox.IsChecked = false;
+    }
+
+    private void LibraryCardPage_DragOver(object sender, DragEventArgs e)
+    {
+        // Accept drops that include storage items (files/folders).
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        }
+        else
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+        }
+
+        e.Handled = true;
+    }
+
+    private async void LibraryCardPage_Drop(object sender, DragEventArgs e)
+    {
+        try
+        {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+                return;
+
+            var storageItems = await e.DataView.GetStorageItemsAsync();
+            if (storageItems == null || storageItems.Count == 0) return;
+
+            // Prefer the first item. If multiple items are dropped, handle the first.
+            var first = storageItems[0];
+
+            if (first is StorageFile file)
+            {
+                // Single file -> import single-file audiobook
+                await ViewModel.ImportAudiobookFromFileActivationAsync(file.Path, showImportDialog: true);
+            }
+            else if (first is StorageFolder folder)
+            {
+                // Folder -> treat folder as multi-file audiobook (top-level files in folder)
+                await ViewModel.ImportAudiobookFromFolderAsync(folder.Path);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log and show notification on failure
+            ViewModel.LoggingService.LogError(ex, true);
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "Failed to import dropped item.",
+                Severity = InfoBarSeverity.Error
+            });
+        }
     }
 
     #region debug button

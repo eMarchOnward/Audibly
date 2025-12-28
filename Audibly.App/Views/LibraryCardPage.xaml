@@ -13,7 +13,10 @@
     xmlns:viewModels="using:Audibly.App.ViewModels"
     xmlns:views="using:Audibly.App.Views"
     xmlns:winUi="using:CommunityToolkit.WinUI"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    AllowDrop="True"
+    DragOver="LibraryCardPage_DragOver"
+    Drop="LibraryCardPage_Drop">
 
     <Page.Resources>
         <converters:StringToImageSourceConverter x:Key="StringToImageSourceConverter" />
