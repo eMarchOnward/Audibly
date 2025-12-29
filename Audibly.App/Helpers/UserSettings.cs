@@ -196,4 +196,92 @@ public static class UserSettings
         }
         set => ApplicationData.Current.LocalSettings.Values["SortMode"] = value;
     }
+
+    public static int WindowWidth
+    {
+        get
+        {
+            try
+            {
+                var windowWidth = ApplicationData.Current.LocalSettings.Values["WindowWidth"];
+                if (windowWidth != null)
+                    if (int.TryParse(windowWidth.ToString(), out var result))
+                        return result;
+
+                return 0; // 0 indicates no saved size, use default
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 0;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["WindowWidth"] = value;
+    }
+
+    public static int WindowHeight
+    {
+        get
+        {
+            try
+            {
+                var windowHeight = ApplicationData.Current.LocalSettings.Values["WindowHeight"];
+                if (windowHeight != null)
+                    if (int.TryParse(windowHeight.ToString(), out var result))
+                        return result;
+
+                return 0; // 0 indicates no saved size, use default
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 0;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["WindowHeight"] = value;
+    }
+
+    public static int WindowX
+    {
+        get
+        {
+            try
+            {
+                var windowX = ApplicationData.Current.LocalSettings.Values["WindowX"];
+                if (windowX != null)
+                    if (int.TryParse(windowX.ToString(), out var result))
+                        return result;
+
+                return int.MinValue; // MinValue indicates no saved position, use default
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return int.MinValue;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["WindowX"] = value;
+    }
+
+    public static int WindowY
+    {
+        get
+        {
+            try
+            {
+                var windowY = ApplicationData.Current.LocalSettings.Values["WindowY"];
+                if (windowY != null)
+                    if (int.TryParse(windowY.ToString(), out var result))
+                        return result;
+
+                return int.MinValue; // MinValue indicates no saved position, use default
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return int.MinValue;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["WindowY"] = value;
+    }
 }

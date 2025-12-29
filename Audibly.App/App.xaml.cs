@@ -135,6 +135,9 @@ public partial class App : Application
         var appWindow = WindowHelper.GetAppWindow(Window);
         appWindow.Closing += async (_, _) =>
         {
+            // Save window size and position before closing
+            Window.SaveWindowSizeAndPosition();
+            
             if (PlayerViewModel.NowPlaying != null) await PlayerViewModel.NowPlaying.SaveAsync();
             PlayerViewModel.Dispose();
             WindowHelper.CloseAll();
@@ -160,7 +163,16 @@ public partial class App : Application
 
         (Window as MainWindow)?.TrySetSystemBackdrop();
 
-        Window.CustomizeWindow(-1, -1, true, true, true, true, true, true);
+        // Try to restore saved window size and position, otherwise use default
+        Window.RestoreWindowSizeAndPosition();
+        
+        // If no saved size was found, use the default window size
+        var savedWidth = UserSettings.WindowWidth;
+        var savedHeight = UserSettings.WindowHeight;
+        if (savedWidth == 0 || savedHeight == 0)
+        {
+            Window.CustomizeWindow(-1, -1, true, true, true, true, true, true);
+        }
 
         ThemeHelper.Initialize();
 

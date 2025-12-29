@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Input;
 using Sharpener.Extensions;
 using WinRT.Interop;
 using static PInvoke.User32;
+using Audibly.App.Helpers;
 // using Monitor = Audibly.App.Helpers.Monitor;
 
 namespace Audibly.App.Extensions;
@@ -239,6 +240,65 @@ public static class WindowExtensions
         if (_isMoving)
             _apw.Move(new PointInt32(_nXWindow + (pt.x - _nX), _nYWindow + (pt.y - _nY)));
         e.Handled = true;
+    }
+
+    public static void SaveWindowSizeAndPosition(this Window window)
+    {
+        var hWnd = WindowNative.GetWindowHandle(window);
+        var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
+        var appWindow = AppWindow.GetFromWindowId(windowId);
+
+        UserSettings.WindowWidth = appWindow.Size.Width;
+        UserSettings.WindowHeight = appWindow.Size.Height;
+        UserSettings.WindowX = appWindow.Position.X;
+        UserSettings.WindowY = appWindow.Position.Y;
+    }
+
+    public static void RestoreWindowSizeAndPosition(this Window window)
+    {
+        var savedWidth = UserSettings.WindowWidth;
+        var savedHeight = UserSettings.WindowHeight;
+        var savedX = UserSettings.WindowX;
+        var savedY = UserSettings.WindowY;
+
+        if (savedWidth > 0 && savedHeight > 0)
+        {
+            var hWnd = WindowNative.GetWindowHandle(window);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            var displayArea = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Nearest);
+
+            // Ensure the saved position is still valid (display might have changed)
+            var x = savedX;
+            var y = savedY;
+
+            if (savedX != int.MinValue && savedY != int.MinValue && displayArea != null)
+            {
+                // Make sure the window is still visible on screen
+                if (x < displayArea.WorkArea.X) x = displayArea.WorkArea.X;
+                if (y < displayArea.WorkArea.Y) y = displayArea.WorkArea.Y;
+                if (x + savedWidth > displayArea.WorkArea.X + displayArea.WorkArea.Width)
+                    x = displayArea.WorkArea.X + displayArea.WorkArea.Width - savedWidth;
+                if (y + savedHeight > displayArea.WorkArea.Y + displayArea.WorkArea.Height)
+                    y = displayArea.WorkArea.Y + displayArea.WorkArea.Height - savedHeight;
+            }
+            else
+            {
+                // Center the window if no position was saved or position is invalid
+                if (displayArea != null)
+                {
+                    x = (displayArea.WorkArea.Width - savedWidth) / 2 + displayArea.WorkArea.X;
+                    y = (displayArea.WorkArea.Height - savedHeight) / 2 + displayArea.WorkArea.Y;
+                }
+                else
+                {
+                    x = 100;
+                    y = 100;
+                }
+            }
+
+            appWindow.MoveAndResize(new RectInt32(x, y, savedWidth, savedHeight));
+        }
     }
 
     public static int Width(this Window window)
