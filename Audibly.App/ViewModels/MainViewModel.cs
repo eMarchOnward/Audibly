@@ -973,6 +973,7 @@ public class MainViewModel : BindableBase
         openPicker.ViewMode = PickerViewMode.Thumbnail;
         openPicker.FileTypeFilter.Add(".m4b");
         openPicker.FileTypeFilter.Add(".mp3");
+        openPicker.FileTypeFilter.Add(".m4a"); // <-- added .m4a
 
         var file = await openPicker.PickSingleFileAsync();
         if (file == null) return;
@@ -1171,6 +1172,7 @@ public class MainViewModel : BindableBase
         openPicker.ViewMode = PickerViewMode.Thumbnail;
         openPicker.FileTypeFilter.Add(".m4b");
         openPicker.FileTypeFilter.Add(".mp3");
+        openPicker.FileTypeFilter.Add(".m4a"); // <-- added .m4a
 
         var files = await openPicker.PickMultipleFilesAsync();
         if (files.IsNullOrEmpty()) return;
@@ -1379,13 +1381,14 @@ public class MainViewModel : BindableBase
     {
         if (string.IsNullOrWhiteSpace(folderPath)) return;
 
-        // gather top-level audio files (.m4b, .mp3)
+        // gather top-level audio files (.m4b, .mp3, .m4a)
         string[] filesArray;
         try
         {
             filesArray = Directory.EnumerateFiles(folderPath, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(f => f.EndsWith(".m4b", StringComparison.OrdinalIgnoreCase) ||
-                            f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                            f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
+                            f.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)) // <-- added .m4a
                 .OrderBy(f => f)
                 .ToArray();
         }

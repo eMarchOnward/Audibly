@@ -43,7 +43,8 @@ public class FileImportService : IImportFiles
 
         var files = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
             .Where(file => file.EndsWith(".m4b", StringComparison.OrdinalIgnoreCase) ||
-                           file.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                           file.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) ||
+                           file.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)) // <-- added .m4a
             .ToList();
         var numberOfFiles = files.Count;
 
@@ -250,7 +251,8 @@ public class FileImportService : IImportFiles
                 // check if this is the 1st file
                 if (audiobook.SourcePaths.Count == 0)
                 {
-                    audiobook.Title = track.Title;
+                    // Prefer Album tag for audiobook title; fall back to Title when Album is empty.
+                    audiobook.Title = track.Album.IsNullOrEmpty() ? track.Title : track.Album;
                     audiobook.Composer = track.Composer;
                     audiobook.Author = track.Artist;
                     audiobook.Description =
@@ -360,7 +362,8 @@ public class FileImportService : IImportFiles
             var audiobook = new Audiobook
             {
                 CurrentSourceFileIndex = 0,
-                Title = track.Title,
+                // Prefer Album tag for audiobook title; fall back to Title when Album is empty.
+                Title = track.Album.IsNullOrEmpty() ? track.Title : track.Album,
                 Composer = track.Composer,
                 CurrentChapterIndex = importedAudiobook?.CurrentChapterIndex ?? 0,
                 Duration = track.Duration,
