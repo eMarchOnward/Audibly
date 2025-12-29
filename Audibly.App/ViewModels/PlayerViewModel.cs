@@ -344,20 +344,29 @@ public class PlayerViewModel : BindableBase, IDisposable
         await NowPlaying.SaveAsync();
     }
 
+    public void SetPendingAutoPlay(bool value)
+    {
+        _pendingAutoPlay = value;
+    }
+
     public async Task OpenAudiobook(AudiobookViewModel audiobook)
     {
         if (NowPlaying != null && NowPlaying.Equals(audiobook))
             return;
 
-        // todo: trying this out
-        if (NowPlaying != null)
-        {
-            NowPlaying.IsNowPlaying = false;
+        // Store the current audiobook to ensure we properly save its state
+        var previousAudiobook = NowPlaying;
 
-            await NowPlaying.SaveAsync();
-        }
-
+        // Pause playback first to stop position updates
         MediaPlayer.Pause();
+
+        // If we have a previous audiobook, ensure it's properly saved before switching
+        if (previousAudiobook != null)
+        {
+            previousAudiobook.IsNowPlaying = false;
+            // Wait for any pending saves to complete
+            await previousAudiobook.SaveAsync();
+        }
 
         App.ViewModel.SelectedAudiobook = audiobook;
 
@@ -375,6 +384,7 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
+            // Now it's safe to switch to the new audiobook
             NowPlaying = audiobook;
 
             if (NowPlaying.DateLastPlayed == null)
@@ -528,41 +538,52 @@ public class PlayerViewModel : BindableBase, IDisposable
     {
         if (NowPlaying == null) return;
 
-        if (!NowPlaying.CurrentChapter.InRange(CurrentPosition.TotalMilliseconds))
+        // Additional safety check: ensure we're not processing position updates for a stale audiobook
+        // This can happen during audiobook switching when events are queued
+        var currentNowPlaying = NowPlaying; // Capture current reference to avoid race conditions
+
+        if (!currentNowPlaying.CurrentChapter.InRange(CurrentPosition.TotalMilliseconds))
         {
-            var newChapter = NowPlaying.Chapters.FirstOrDefault(c =>
-                c.ParentSourceFileIndex == NowPlaying.CurrentSourceFileIndex &&
+            var newChapter = currentNowPlaying.Chapters.FirstOrDefault(c =>
+                c.ParentSourceFileIndex == currentNowPlaying.CurrentSourceFileIndex &&
                 c.InRange(CurrentPosition.TotalMilliseconds));
 
             if (newChapter != null)
                 _ = _dispatcherQueue.EnqueueAsync(() =>
                 {
-                    NowPlaying.CurrentChapterIndex = ChapterComboSelectedIndex = newChapter.Index;
-                    NowPlaying.CurrentChapterTitle = newChapter.Title;
-                    ChapterDurationMs = (int)(NowPlaying.CurrentChapter.EndTime - NowPlaying.CurrentChapter.StartTime);
+                    // Double-check that NowPlaying hasn't changed since we started processing this event
+                    if (NowPlaying == currentNowPlaying)
+                    {
+                        currentNowPlaying.CurrentChapterIndex = ChapterComboSelectedIndex = newChapter.Index;
+                        currentNowPlaying.CurrentChapterTitle = newChapter.Title;
+                        ChapterDurationMs = (int)(currentNowPlaying.CurrentChapter.EndTime - currentNowPlaying.CurrentChapter.StartTime);
+                    }
                 });
         }
 
         _ = _dispatcherQueue.EnqueueAsync(async () =>
         {
-            ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > NowPlaying.CurrentChapter.StartTime
-                ? CurrentPosition.TotalMilliseconds - NowPlaying.CurrentChapter.StartTime
+            // Double-check that NowPlaying hasn't changed since we started processing this event
+            if (NowPlaying != currentNowPlaying) return;
+
+            ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > currentNowPlaying.CurrentChapter.StartTime
+                ? CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime
                 : 0);
-            // ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds - NowPlaying.CurrentChapter.StartTime);
-            NowPlaying.CurrentTimeMs = (int)CurrentPosition.TotalMilliseconds;
+            // ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime);
+            currentNowPlaying.CurrentTimeMs = (int)CurrentPosition.TotalMilliseconds;
 
             // TODO: this is gross
             // calculate/update progress
             double tmp = 0;
-            if (NowPlaying.CurrentSourceFileIndex != 0)
-                for (var i = 0; i < NowPlaying.CurrentSourceFileIndex; i++)
-                    tmp += NowPlaying.SourcePaths[i].Duration;
+            if (currentNowPlaying.CurrentSourceFileIndex != 0)
+                for (var i = 0; i < currentNowPlaying.CurrentSourceFileIndex; i++)
+                    tmp += currentNowPlaying.SourcePaths[i].Duration;
             tmp += CurrentPosition.TotalSeconds;
-            NowPlaying.Progress = Math.Ceiling(tmp / NowPlaying.Duration * 100);
-            NowPlaying.IsCompleted = NowPlaying.Progress >= 99.9;
-        });
+            currentNowPlaying.Progress = Math.Ceiling(tmp / currentNowPlaying.Duration * 100);
+            currentNowPlaying.IsCompleted = currentNowPlaying.Progress >= 99.9;
 
-        await NowPlaying.SaveAsync();
+            await currentNowPlaying.SaveAsync();
+        });
     }
 
     #endregion
