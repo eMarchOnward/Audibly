@@ -157,6 +157,32 @@
                             </Flyout>
                         </Button.Flyout>
                     </AppBarButton>
+
+                    <!-- new Sort button -->
+                    <AppBarButton
+                        Icon="Sort"
+                        Label="Sort"
+                        ToolTipService.ToolTip="Sort Audiobooks"
+                        x:Name="SortButton">
+                        <AppBarButton.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortAlphabeticalItem"
+                                    Click="SortAlphabetical_OnClick"
+                                    IsChecked="True"
+                                    Text="Alphabetical" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortByDateImportedItem"
+                                    Click="SortByDateImported_OnClick"
+                                    Text="Date imported (newest first)" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortByLastPlayedItem"
+                                    Click="SortByLastPlayed_OnClick"
+                                    Text="Last played (newest first)" />
+                            </MenuFlyout>
+                        </AppBarButton.Flyout>
+                    </AppBarButton>
+
                     <AppBarButton
                         Click="{x:Bind RefreshButton_OnClick}"
                         Icon="Refresh"

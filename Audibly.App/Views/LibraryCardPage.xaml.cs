@@ -445,4 +445,33 @@ public sealed partial class LibraryCardPage : Page
     }
 
     #endregion
+
+    // Sort menu handlers
+    private void SortAlphabetical_OnClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CurrentSortMode = Audibly.App.ViewModels.AudiobookSortMode.Alphabetical;
+
+        SortAlphabeticalItem.IsChecked = true;
+        SortByDateImportedItem.IsChecked = false;
+        SortByLastPlayedItem.IsChecked = false;
+    }
+
+    private void SortByDateImported_OnClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CurrentSortMode = Audibly.App.ViewModels.AudiobookSortMode.DateImported;
+
+        SortAlphabeticalItem.IsChecked = false;
+        SortByDateImportedItem.IsChecked = true;
+        SortByLastPlayedItem.IsChecked = false;
+    }
+
+    private void SortByLastPlayed_OnClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CurrentSortMode = Audibly.App.ViewModels.AudiobookSortMode.DateLastPlayed;
+
+        SortAlphabeticalItem.IsChecked = false;
+        SortByDateImportedItem.IsChecked = false;
+        SortByLastPlayedItem.IsChecked = true;
+    }
+
 }

@@ -28,6 +28,13 @@ using WinRT.Interop;
 
 namespace Audibly.App.ViewModels;
 
+public enum AudiobookSortMode
+{
+    Alphabetical,
+    DateImported,
+    DateLastPlayed
+}
+
 /// <summary>
 ///     Provides data and commands accessible to the entire app.
 /// </summary>
@@ -68,6 +75,8 @@ public class MainViewModel : BindableBase
     private bool _zoomInButtonIsEnabled = true;
     private double _zoomLevel;
     private bool _zoomOutButtonIsEnabled = true;
+
+    private AudiobookSortMode _currentSortMode = AudiobookSortMode.Alphabetical;
 
     /// <summary>
     ///     Creates a new MainViewModel.
@@ -237,6 +246,73 @@ public class MainViewModel : BindableBase
     /// </summary>
     public event ResetFiltersHandler? ResetFilters;
 
+    public AudiobookSortMode CurrentSortMode
+    {
+        get => _currentSortMode;
+        set
+        {
+            if (Set(ref _currentSortMode, value))
+            {
+                ApplySort();
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Applies the current sort mode to the in-memory audiobook lists.
+    /// </summary>
+    public void ApplySort()
+    {
+        try
+        {
+            Comparison<AudiobookViewModel> comparison = (a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase);
+
+            switch (CurrentSortMode)
+            {
+                case AudiobookSortMode.Alphabetical:
+                    comparison = (a, b) =>
+                    {
+                        var titleCompare = string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase);
+                        return titleCompare != 0 ? titleCompare : string.Compare(a.Author, b.Author, StringComparison.OrdinalIgnoreCase);
+                    };
+                    break;
+                case AudiobookSortMode.DateImported:
+                    comparison = (a, b) =>
+                    {
+                        var aDate = a.Model.DateImported ?? DateTime.MinValue;
+                        var bDate = b.Model.DateImported ?? DateTime.MinValue;
+                        // most recent first
+                        return bDate.CompareTo(aDate);
+                    };
+                    break;
+                case AudiobookSortMode.DateLastPlayed:
+                    comparison = (a, b) =>
+                    {
+                        var aDate = a.Model.DateLastPlayed ?? DateTime.MinValue;
+                        var bDate = b.Model.DateLastPlayed ?? DateTime.MinValue;
+                        // most recent first
+                        return bDate.CompareTo(aDate);
+                    };
+                    break;
+            }
+
+            // sort the underlying list used for filtering
+            AudiobooksForFilter.Sort(comparison);
+
+            // update the observable collection used by the UI
+            // Use TryEnqueue to update UI collection on the dispatcher without blocking
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                Audiobooks.Clear();
+                foreach (var a in AudiobooksForFilter) Audiobooks.Add(a);
+            });
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError(ex, true);
+        }
+    }
+
     /// <summary>
     ///     Gets the complete list of audiobooks from the database.
     /// </summary>
@@ -261,6 +337,9 @@ public class MainViewModel : BindableBase
                     Audiobooks.Add(audiobookViewModel);
                     AudiobooksForFilter.Add(audiobookViewModel);
                 }
+
+                // apply sort after populating lists
+                ApplySort();
 
                 if (firstRun)
                 {
