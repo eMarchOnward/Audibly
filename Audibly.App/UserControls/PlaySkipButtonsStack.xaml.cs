@@ -56,8 +56,23 @@ public sealed partial class PlaySkipButtonsStack : UserControl
 
     private async void PreviousChapterButton_Click(object sender, RoutedEventArgs e)
     {
-        if (PlayerViewModel.NowPlaying is not null &&
-            PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1 > 0 &&
+        if (PlayerViewModel.NowPlaying is null || PlayerViewModel.NowPlaying.CurrentChapter is null)
+            return;
+
+        var currentPos = PlayerViewModel.CurrentPosition;
+        var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+        
+        // If we're not at the start of the current chapter (with a small tolerance), go to chapter start first
+        var tolerance = TimeSpan.FromSeconds(2); // 2-second tolerance to account for small variations
+        if (currentPos > chapterStart + tolerance)
+        {
+            PlayerViewModel.CurrentPosition = chapterStart;
+            await PlayerViewModel.NowPlaying.SaveAsync();
+            return;
+        }
+
+        // If we're at/near the start of the current chapter, proceed to previous chapter
+        if (PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1 > 0 &&
             PlayerViewModel.NowPlaying?.Chapters[(int)(PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1)]
                 .ParentSourceFileIndex != PlayerViewModel.NowPlaying?.CurrentSourceFileIndex)
         {
@@ -129,9 +144,39 @@ public sealed partial class PlaySkipButtonsStack : UserControl
 
     private async void SkipBackButton_OnClick(object sender, RoutedEventArgs e)
     {
-        PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition - _skipBackButtonAmount > TimeSpan.Zero
-            ? PlayerViewModel.CurrentPosition - _skipBackButtonAmount
-            : TimeSpan.Zero;
+        // If we don't have NowPlaying or a CurrentChapter, fall back to previous behavior.
+        if (PlayerViewModel.NowPlaying == null || PlayerViewModel.NowPlaying.CurrentChapter == null)
+        {
+            PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition - _skipBackButtonAmount > TimeSpan.Zero
+                ? PlayerViewModel.CurrentPosition - _skipBackButtonAmount
+                : TimeSpan.Zero;
+
+            if (PlayerViewModel.NowPlaying != null)
+                await PlayerViewModel.NowPlaying.SaveAsync();
+
+            return;
+        }
+
+        var currentPos = PlayerViewModel.CurrentPosition;
+        var candidate = currentPos - _skipBackButtonAmount;
+
+        // Start of the current chapter (ms -> TimeSpan)
+        var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+
+        // If candidate would go before the start of the current source file, clamp to source file start (0).
+        if (candidate < TimeSpan.Zero)
+        {
+            PlayerViewModel.CurrentPosition = TimeSpan.Zero;
+        }
+        // If candidate would cross before the current chapter, clamp to chapter start.
+        else if (candidate < chapterStart)
+        {
+            PlayerViewModel.CurrentPosition = chapterStart;
+        }
+        else
+        {
+            PlayerViewModel.CurrentPosition = candidate;
+        }
 
         await PlayerViewModel.NowPlaying.SaveAsync();
     }
