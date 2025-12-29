@@ -37,16 +37,16 @@
         <SentryCreateRelease>false</SentryCreateRelease>
 
         <!-- Automatically associates commits with the release. -->
-        <SentrySetCommits>true</SentrySetCommits>
+        <SentrySetCommits>false</SentrySetCommits>
 
         <!-- Optionally provide explicit flags to the set-commits command -->
         <SentrySetCommitOptions>--local</SentrySetCommitOptions>
 
         <!-- Sends symbols to Sentry, enabling symbolication of stack traces. -->
-        <SentryUploadSymbols>true</SentryUploadSymbols>
+        <SentryUploadSymbols>false</SentryUploadSymbols>
 
         <!-- Sends sources to Sentry, enabling display of source context. -->
-        <SentryUploadSources>true</SentryUploadSources>
+        <SentryUploadSources>false</SentryUploadSources>
 
     </PropertyGroup>
 
