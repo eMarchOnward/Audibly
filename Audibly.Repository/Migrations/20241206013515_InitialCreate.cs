@@ -20,6 +20,7 @@ namespace Audibly.Repository.Migrations
                     Composer = table.Column<string>(type: "TEXT", nullable: false),
                     CurrentSourceFileIndex = table.Column<int>(type: "INTEGER", nullable: false),
                     DateLastPlayed = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    DateImported = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Description = table.Column<string>(type: "TEXT", nullable: false),
                     Duration = table.Column<long>(type: "INTEGER", nullable: false),
                     CoverImagePath = table.Column<string>(type: "TEXT", nullable: false),

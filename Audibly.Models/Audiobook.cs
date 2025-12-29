@@ -1,6 +1,6 @@
 ﻿// Author: rstewa · https://github.com/rstewa
 // Created: 04/15/2024
-// Updated: 10/11/2024
+// Updated: 12/28/2025
 
 namespace Audibly.Models;
 
@@ -13,6 +13,13 @@ public class Audiobook : DbObject, IEquatable<Audiobook>
     public string Composer { get; set; }
     public int CurrentSourceFileIndex { get; set; }
     public DateTime? DateLastPlayed { get; set; }
+
+    /// <summary>
+    /// Date and time the audiobook was imported into the library.
+    /// Stored as UTC by import code (nullable to avoid migration issues for older rows).
+    /// </summary>
+    public DateTime? DateImported { get; set; }
+
     public string Description { get; set; }
     public long Duration { get; set; } // *
 

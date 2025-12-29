@@ -1,6 +1,6 @@
 ﻿// Author: rstewa · https://github.com/rstewa
 // Created: 04/15/2024
-// Updated: 10/17/2024
+// Updated: 12/28/2025
 
 using System;
 using System.Collections.Generic;
@@ -239,7 +239,8 @@ public class FileImportService : IImportFiles
                 SourcePaths = [],
                 PlaybackSpeed = 1.0,
                 Volume = 1.0,
-                IsCompleted = false
+                IsCompleted = false,
+                DateImported = DateTime.UtcNow
             };
 
             var sourceFileIndex = 0;
@@ -380,6 +381,7 @@ public class FileImportService : IImportFiles
                 Volume = 1.0,
                 IsCompleted = importedAudiobook?.IsCompleted ?? false,
                 IsNowPlaying = importedAudiobook?.IsNowPlaying ?? false,
+                DateImported = DateTime.UtcNow,
                 SourcePaths =
                 [
                     sourceFile
