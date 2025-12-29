@@ -39,10 +39,10 @@
             HorizontalAlignment="Stretch"
             Margin="0,0,0,-4"
             Maximum="{x:Bind PlayerViewModel.ChapterDurationMs, Mode=OneWay}"
-            PointerCaptureLost="NowPlayingBar_OnPointerCaptureLost"
             ThumbToolTipValueConverter="{StaticResource ProgressSliderValueConverter}"
             Value="{x:Bind PlayerViewModel.ChapterPositionMs, Mode=OneWay}"
-            VerticalAlignment="Bottom" />
+            VerticalAlignment="Bottom"
+            x:Name="PositionSlider" />
 
         <TextBlock
             FontSize="20"

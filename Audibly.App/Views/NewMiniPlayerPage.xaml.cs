@@ -5,6 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.System;
+using Windows.Media.Playback;
 using Audibly.App.Extensions;
 using Audibly.App.Helpers;
 using Audibly.App.UserControls;
@@ -13,8 +14,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Constants = Audibly.App.Helpers.Constants;
-using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Input;
+using CommunityToolkit.WinUI;
 
 namespace Audibly.App.Views;
 
@@ -23,16 +25,18 @@ namespace Audibly.App.Views;
 /// </summary>
 public sealed partial class NewMiniPlayerPage : Page
 {
-    private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
     private CancellationTokenSource? _playbackSpeedFlyoutCts;
+
+    // todo: fix the bug where this is getting triggered even when the user hasn't clicked the slider
+    private bool _isUserDragging = false;
+    private bool _wasPlayingBeforeDrag = false;
 
     public NewMiniPlayerPage()
     {
         InitializeComponent();
-        KeyDown += NewMiniPlayerPage_KeyDown;
-
-        // need this to show the slider when the user increases or decreases the speed with the keyboard shortcuts
-        PlaybackSpeedSliderFlyout.Opened += (s, e) => { PlaybackSpeedSlider.Focus(FocusState.Programmatic); };
+        _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        Loaded += NewMiniPlayerPage_Loaded;
     }
 
     /// <summary>
@@ -44,6 +48,16 @@ public sealed partial class NewMiniPlayerPage : Page
     ///     Gets the app-wide PlayerViewModel instance.
     /// </summary>
     public PlayerViewModel PlayerViewModel => App.PlayerViewModel;
+
+    private void NewMiniPlayerPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        // Attach pointer events to the slider itself with handledEventsToo=true
+        // This is more reliable than trying to find the thumb
+        PositionSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Slider_OnPointerPressed), true);
+        PositionSlider.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Slider_OnPointerMoved), true);
+        PositionSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Slider_OnPointerReleased), true);
+        PositionSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Slider_OnPointerCaptureLost), true);
+    }
 
     private void NewMiniPlayerPage_KeyDown(object sender, KeyRoutedEventArgs args)
     {
@@ -124,19 +138,80 @@ public sealed partial class NewMiniPlayerPage : Page
         PlaybackSpeedSlider.Value = newValue;
     }
 
-    // todo: fix the bug where this is getting triggered even when the user hasn't clicked the slider
-    private async void NowPlayingBar_OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    private void Slider_OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        var slider = sender as Slider;
+        // Only consider it a drag start if the pointer is pressed over the slider
+        if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse && 
+            e.GetCurrentPoint(PositionSlider).Properties.IsLeftButtonPressed)
+        {
+            _isUserDragging = true;
+            
+            // Check if currently playing and pause if so
+            _wasPlayingBeforeDrag = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+            if (_wasPlayingBeforeDrag)
+            {
+                PlayerViewModel.MediaPlayer.Pause();
+            }
+        }
+    }
 
-        if (slider == null || slider.Value == 0) return;
+    private void Slider_OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        // Confirm we're in a drag operation if we're moving with button pressed
+        if (!_isUserDragging && 
+            e.GetCurrentPoint(PositionSlider).Properties.IsLeftButtonPressed)
+        {
+            _isUserDragging = true;
+            
+            // Check if currently playing and pause if so
+            _wasPlayingBeforeDrag = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+            if (_wasPlayingBeforeDrag)
+            {
+                PlayerViewModel.MediaPlayer.Pause();
+            }
+        }
+    }
 
+    private async void Slider_OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isUserDragging) return;
+        
+        _isUserDragging = false;
+        
         if (PlayerViewModel.NowPlaying?.CurrentChapter == null) return;
 
+        // Update the playback position
         PlayerViewModel.CurrentPosition =
-            TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime + slider.Value);
+            TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime + PositionSlider.Value);
 
         await PlayerViewModel.NowPlaying.SaveAsync();
+        
+        // Resume playback if it was playing before drag
+        if (_wasPlayingBeforeDrag)
+        {
+            PlayerViewModel.MediaPlayer.Play();
+        }
+    }
+
+    private async void Slider_OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isUserDragging) return;
+        
+        _isUserDragging = false;
+        
+        if (PlayerViewModel.NowPlaying?.CurrentChapter != null)
+        {
+            PlayerViewModel.CurrentPosition =
+                TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime + PositionSlider.Value);
+
+            await PlayerViewModel.NowPlaying.SaveAsync();
+        }
+        
+        // Resume playback if it was playing before drag
+        if (_wasPlayingBeforeDrag)
+        {
+            PlayerViewModel.MediaPlayer.Play();
+        }
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
