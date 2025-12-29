@@ -162,7 +162,63 @@ public sealed partial class PlaySkipButtonsStack : UserControl
 
         // Start of the current chapter (ms -> TimeSpan)
         var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+        
+        // Define tolerance for "at the start" - if we're within 3 seconds of chapter start or file start
+        var tolerance = TimeSpan.FromSeconds(3);
 
+        // Check if we're at the start of the chapter or file (considering tolerance)
+        bool isAtChapterStart = currentPos <= chapterStart + tolerance;
+        bool isAtFileStart = currentPos <= tolerance; // Very beginning of the file
+
+        // If we're at the start of chapter/file, pause and go to previous chapter/file
+        if (isAtChapterStart || isAtFileStart)
+        {
+            // Pause playback first
+            if (PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == Windows.Media.Playback.MediaPlaybackState.Playing)
+            {
+                PlayerViewModel.MediaPlayer.Pause();
+            }
+
+            // Try to go to previous chapter using the existing logic from PreviousChapterButton
+            if (PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1 >= 0)
+            {
+                // Check if previous chapter is in a different source file
+                if (PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1 >= 0 &&
+                    PlayerViewModel.NowPlaying?.Chapters[(int)(PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1)]
+                        .ParentSourceFileIndex != PlayerViewModel.NowPlaying?.CurrentSourceFileIndex)
+                {
+                    var newChapterIdx = (int)PlayerViewModel.NowPlaying.CurrentChapterIndex - 1;
+                    PlayerViewModel.OpenSourceFile(PlayerViewModel.NowPlaying.CurrentSourceFileIndex - 1, newChapterIdx);
+                    PlayerViewModel.CurrentPosition =
+                        TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.Chapters[newChapterIdx].StartTime);
+                    await PlayerViewModel.NowPlaying.SaveAsync();
+                    return;
+                }
+
+                // Previous chapter is in the same source file
+                var newChapterIndex = PlayerViewModel.NowPlaying.CurrentChapterIndex - 1;
+                if (newChapterIndex >= 0)
+                {
+                    PlayerViewModel.NowPlaying.CurrentChapterIndex = newChapterIndex;
+                    PlayerViewModel.NowPlaying.CurrentChapterTitle =
+                        PlayerViewModel.NowPlaying.Chapters[(int)newChapterIndex].Title;
+                    PlayerViewModel.ChapterComboSelectedIndex = (int)newChapterIndex;
+                    PlayerViewModel.ChapterDurationMs =
+                        (int)(PlayerViewModel.NowPlaying.CurrentChapter.EndTime -
+                              PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+                    PlayerViewModel.CurrentPosition =
+                        TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+
+                    await PlayerViewModel.NowPlaying.SaveAsync();
+                    return;
+                }
+            }
+            
+            // If we can't go to previous chapter, just stay at current position and remain paused
+            return;
+        }
+
+        // Normal skip back behavior when not at the start
         // If candidate would go before the start of the current source file, clamp to source file start (0).
         if (candidate < TimeSpan.Zero)
         {
