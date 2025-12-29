@@ -400,6 +400,18 @@ public class PlayerViewModel : BindableBase, IDisposable
             await NowPlaying.SaveAsync();
         });
 
+        // If the UI is sorted by last played, re-apply sort so the just-played book moves to the front
+        try
+        {
+            if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
+                App.ViewModel.ApplySort();
+        }
+        catch (Exception ex)
+        {
+            // log but do not crash the player
+            App.ViewModel.LoggingService.LogError(ex, true);
+        }
+
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
     }
 
