@@ -172,4 +172,28 @@ public static class UserSettings
         }
         set => ApplicationData.Current.LocalSettings.Values["IsSidebarCollapsed"] = value;
     }
+
+    // remembers user's preferred sort mode for the audiobook list
+    public static int SortMode
+    {
+        get
+        {
+            try
+            {
+                var sortMode = ApplicationData.Current.LocalSettings.Values["SortMode"];
+                if (sortMode != null)
+                    if (int.TryParse(sortMode.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["SortMode"] = 0; // default: Alphabetical
+                return 0;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 0;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["SortMode"] = value;
+    }
 }

@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.ComponentModel;
 using Windows.Storage;
 using Windows.UI;
 using Windows.ApplicationModel.DataTransfer;
@@ -61,6 +62,11 @@ public sealed partial class LibraryCardPage : Page
         // subscribe to page loaded event
         Loaded += LibraryCardPage_Loaded;
         ViewModel.ResetFilters += ViewModelOnResetFilters;
+        // keep sort UI in sync with ViewModel and persisted settings
+        ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
+
+        // initialize sort toggles based on saved sort mode
+        UpdateSortToggleUI();
     }
 
     /// <summary>
@@ -472,6 +478,40 @@ public sealed partial class LibraryCardPage : Page
         SortAlphabeticalItem.IsChecked = false;
         SortByDateImportedItem.IsChecked = false;
         SortByLastPlayedItem.IsChecked = true;
+    }
+
+    private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.CurrentSortMode))
+        {
+            // ensure UI update runs on dispatcher
+            _dispatcherQueue.TryEnqueue(UpdateSortToggleUI);
+        }
+    }
+
+    private void UpdateSortToggleUI()
+    {
+        // controls may not be ready yet
+        if (SortAlphabeticalItem == null || SortByDateImportedItem == null || SortByLastPlayedItem == null) return;
+
+        switch (ViewModel.CurrentSortMode)
+        {
+            case ViewModels.AudiobookSortMode.Alphabetical:
+                SortAlphabeticalItem.IsChecked = true;
+                SortByDateImportedItem.IsChecked = false;
+                SortByLastPlayedItem.IsChecked = false;
+                break;
+            case ViewModels.AudiobookSortMode.DateImported:
+                SortAlphabeticalItem.IsChecked = false;
+                SortByDateImportedItem.IsChecked = true;
+                SortByLastPlayedItem.IsChecked = false;
+                break;
+            case ViewModels.AudiobookSortMode.DateLastPlayed:
+                SortAlphabeticalItem.IsChecked = false;
+                SortByDateImportedItem.IsChecked = false;
+                SortByLastPlayedItem.IsChecked = true;
+                break;
+        }
     }
 
 }

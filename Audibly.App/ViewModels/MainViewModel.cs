@@ -92,6 +92,16 @@ public class MainViewModel : BindableBase
         DefaultPlaybackSpeed = UserSettings.PlaybackSpeed;
         DefaultVolume = UserSettings.Volume;
 
+        // restore saved sort mode
+        try
+        {
+            _currentSortMode = (AudiobookSortMode)UserSettings.SortMode;
+        }
+        catch
+        {
+            _currentSortMode = AudiobookSortMode.Alphabetical;
+        }
+
         Task.Run(() => GetAudiobookListAsync(true));
 
         InitializeZoomLevelToTileSizeDictionary();
@@ -253,6 +263,16 @@ public class MainViewModel : BindableBase
         {
             if (Set(ref _currentSortMode, value))
             {
+                // persist user's choice
+                try
+                {
+                    UserSettings.SortMode = (int)value;
+                }
+                catch (Exception ex)
+                {
+                    LoggingService.LogError(ex, true);
+                }
+
                 ApplySort();
             }
         }
