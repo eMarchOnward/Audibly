@@ -22,6 +22,11 @@
                 Click="DeleteAudiobook_OnClick"
                 Icon="Delete"
                 Text="Delete" />
+            <MenuFlyoutItem Click="ChangeCover_OnClick" Text="Change Cover">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xEB9F;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
             <MenuFlyoutItem Click="ShowInFileExplorer_OnClick" Text="Show in File Explorer">
                 <MenuFlyoutItem.Icon>
                     <FontIcon Glyph="&#xEC50;" />

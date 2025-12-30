@@ -83,6 +83,15 @@ public class AudiobookViewModel : BindableBase
         IsModified = false;
     }
 
+    /// <summary>
+    ///     Refreshes the cover image properties to force UI update.
+    /// </summary>
+    public void RefreshCoverImage()
+    {
+        OnPropertyChanged(nameof(CoverImagePath));
+        OnPropertyChanged(nameof(ThumbnailPath));
+    }
+
 
     #region model database properties
 

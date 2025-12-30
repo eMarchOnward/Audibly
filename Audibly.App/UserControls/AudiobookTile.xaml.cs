@@ -18,6 +18,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
 using ColorHelper = CommunityToolkit.WinUI.Helpers.ColorHelper;
 
 namespace Audibly.App.UserControls;
@@ -89,6 +92,81 @@ public sealed partial class AudiobookTile : UserControl
         ViewModel.SelectedAudiobook = audiobook;
 
         await ViewModel.DeleteAudiobookAsync();
+    }
+
+    private async void ChangeCover_OnClick(object sender, RoutedEventArgs e)
+    {
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
+
+        // Show file picker for supported image formats
+        var supportedImageTypes = new List<string> { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp" };
+        var selectedFile = ViewModel.FileDialogService.OpenFileDialog(supportedImageTypes, PickerLocationId.PicturesLibrary);
+        
+        if (selectedFile == null) return; // User cancelled
+        
+        try
+        {
+            // Read the selected image file
+            var imageBytes = await FileIO.ReadBufferAsync(selectedFile);
+            var imageBytesArray = new byte[imageBytes.Length];
+            using (var reader = DataReader.FromBuffer(imageBytes))
+            {
+                reader.ReadBytes(imageBytesArray);
+            }
+            
+            // Generate the folder path for this audiobook's data
+            var folderName = $"{audiobook.Title}_{audiobook.Id}".Replace(" ", "_");
+            
+            // Delete old cover images first
+            if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
+            {
+                await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
+            }
+            
+            // Create new cover image and thumbnail using the same process as import
+            var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(folderName, imageBytesArray);
+            
+            if (!string.IsNullOrEmpty(coverImagePath))
+            {
+                // Update the audiobook model with new cover paths
+                audiobook.Model.CoverImagePath = coverImagePath;
+                audiobook.Model.ThumbnailPath = thumbnailPath;
+                
+                // Save the updated audiobook to database first
+                await audiobook.SaveAsync();
+                
+                // Force refresh of cover image properties in the UI with a small delay
+                // This ensures the new image files are fully written before UI tries to load them
+                await Task.Delay(100);
+                audiobook.RefreshCoverImage();
+                
+                // Show success notification
+                ViewModel.EnqueueNotification(new Notification
+                {
+                    Message = "Cover image updated successfully!",
+                    Severity = InfoBarSeverity.Success
+                });
+            }
+            else
+            {
+                // Show error notification
+                ViewModel.EnqueueNotification(new Notification
+                {
+                    Message = "Failed to update cover image.",
+                    Severity = InfoBarSeverity.Error
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            ViewModel.LoggingService.LogError(ex, true);
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "An error occurred while updating the cover image.",
+                Severity = InfoBarSeverity.Error
+            });
+        }
     }
 
     private void ButtonTile_OnRightTapped(object sender, RightTappedRoutedEventArgs? e)

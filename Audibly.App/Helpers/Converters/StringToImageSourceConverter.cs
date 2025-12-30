@@ -18,7 +18,10 @@ public class StringToImageSourceConverter : IValueConverter
         
         try
         {
-            return new BitmapImage(new Uri(path));
+            var bitmapImage = new BitmapImage();
+            bitmapImage.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmapImage.UriSource = new Uri(path);
+            return bitmapImage;
         }
         catch
         {
