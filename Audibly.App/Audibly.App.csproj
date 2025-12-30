@@ -22,8 +22,7 @@
         <GenerateTestArtifacts>True</GenerateTestArtifacts>
         <AppxBundle>Always</AppxBundle>
         <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
-        <AppxBundlePlatforms>x86|x64|arm64</AppxBundlePlatforms>
-        <PackageCertificateThumbprint>46A59B05840FB970E25276C7115605D52DA17F83</PackageCertificateThumbprint>
+        <AppxBundlePlatforms>x64</AppxBundlePlatforms>
         <PackageCertificateKeyFile>Audibly.App_TemporaryKey.pfx</PackageCertificateKeyFile>
     </PropertyGroup>
 
