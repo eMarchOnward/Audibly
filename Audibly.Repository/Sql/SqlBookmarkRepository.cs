@@ -45,11 +45,13 @@ public class SqlBookmarkRepository(AudiblyContext db) : IBookmarkRepository
 
     public async Task DeleteAsync(Guid id)
     {
-        var bookmark = await db.Bookmarks.FirstOrDefaultAsync(b => b.Id == id);
-        if (bookmark != null)
+        try
         {
-            db.Bookmarks.Remove(bookmark);
-            await db.SaveChangesAsync();
+            await db.Bookmarks.Where(b => b.Id == id).ExecuteDeleteAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // ignore
         }
     }
 }

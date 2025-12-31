@@ -373,12 +373,22 @@ public sealed partial class AudiobookTile : UserControl
         {
             try
             {
+                button.IsEnabled = false; // prevent double-click re-entrancy
                 await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
+                _bookmarks.Remove(bookmark);
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+            {
+                // Row was already deleted; update UI and swallow
                 _bookmarks.Remove(bookmark);
             }
             catch (Exception ex)
             {
                 App.ViewModel.LoggingService?.LogError(ex, true);
+            }
+            finally
+            {
+                button.IsEnabled = true;
             }
         }
     }
