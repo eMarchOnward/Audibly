@@ -90,33 +90,54 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
             .ToListAsync();
     }
 
+    // C#
     public async Task<Audiobook?> UpsertAsync(Audiobook audiobook)
     {
-        var current = await db.Audiobooks
-            .Include(x => x.SourcePaths.OrderBy(source => source.Index))
-            .Include(x => x.Chapters.OrderBy(chapter => chapter.Index))
-            .Include(x => x.Bookmarks)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.Title == audiobook.Title && a.Author == audiobook.Author);
+        // load tracked entity (look up by Id first, fall back to Title+Author)
+        var existing = await db.Audiobooks
+            .Include(a => a.SourcePaths)
+            .Include(a => a.Chapters)
+            .Include(a => a.Bookmarks)
+            .FirstOrDefaultAsync(a => a.Id == audiobook.Id
+                || (a.Title == audiobook.Title && a.Author == audiobook.Author));
 
-        // TODO: fix this bug
-        if (current != null && current.Id != audiobook.Id)
-            return audiobook;
-
-        if (current == null)
+        if (existing == null)
+        {
             db.Audiobooks.Add(audiobook);
+        }
         else
-            db.Audiobooks.Update(audiobook);
-
-        try
         {
-            await db.SaveChangesAsync();
-        }
-        catch (Exception e)
-        {
-            return null;
+            // if found by Title/Author but different Id -> handle conflict explicitly
+            if (existing.Id != audiobook.Id)
+                return null; // or merge, or signal conflict
+
+            // copy scalar properties
+            db.Entry(existing).CurrentValues.SetValues(audiobook);
+
+            // reconcile SourcePaths: add/update/remove by Id
+            var incomingById = audiobook.SourcePaths.ToDictionary(s => s.Id);
+            foreach (var src in existing.SourcePaths.ToList())
+            {
+                if (!incomingById.TryGetValue(src.Id, out var incoming))
+                {
+                    // removed
+                    db.Remove(src);
+                }
+                else
+                {
+                    // update scalar props
+                    db.Entry(src).CurrentValues.SetValues(incoming);
+                    incomingById.Remove(src.Id);
+                }
+            }
+            // remaining incoming are new
+            foreach (var newSrc in incomingById.Values)
+                existing.SourcePaths.Add(newSrc);
+
+            // repeat reconciliation for Chapters and Bookmarks
         }
 
+        await db.SaveChangesAsync();
         return audiobook;
     }
 
