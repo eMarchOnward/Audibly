@@ -2,14 +2,18 @@
 // Updated: 12/26/2025
 
 using System;
+using System.Linq;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.System;
 using Windows.Media.Playback;
+using Windows.System;
 using Audibly.App.Extensions;
 using Audibly.App.Helpers;
 using Audibly.App.UserControls;
 using Audibly.App.ViewModels;
+using Audibly.Models;
+using Audibly.App.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -17,6 +21,8 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using CommunityToolkit.WinUI;
+
+using AppConstants = Audibly.App.Helpers.Constants;
 
 namespace Audibly.App.Views;
 
@@ -31,6 +37,8 @@ public sealed partial class NewMiniPlayerPage : Page
     // todo: fix the bug where this is getting triggered even when the user hasn't clicked the slider
     private bool _isUserDragging = false;
     private bool _wasPlayingBeforeDrag = false;
+
+    private ObservableCollection<Bookmark> _bookmarks = new();
 
     public NewMiniPlayerPage()
     {
@@ -119,22 +127,22 @@ public sealed partial class NewMiniPlayerPage : Page
     private void ResetPlaybackSpeed()
     {
         PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
-        PlaybackSpeedSlider.Value = Constants.PlaybackSpeedDefault;
+        PlaybackSpeedSlider.Value = AppConstants.PlaybackSpeedDefault;
     }
 
     private void HandleSpeedIncrease()
     {
         PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
-        var newValue = PlaybackSpeedSlider.Value + Constants.PlaybackSpeedIncrement;
-        if (newValue >= Constants.PlaybackSpeedMaximum) newValue = Constants.PlaybackSpeedMaximum;
+        var newValue = PlaybackSpeedSlider.Value + AppConstants.PlaybackSpeedIncrement;
+        if (newValue >= AppConstants.PlaybackSpeedMaximum) newValue = AppConstants.PlaybackSpeedMaximum;
         PlaybackSpeedSlider.Value = newValue;
     }
 
     private void HandleSpeedDecrease()
     {
         PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
-        var newValue = PlaybackSpeedSlider.Value - Constants.PlaybackSpeedIncrement;
-        if (newValue <= Constants.PlaybackSpeedMinimum) newValue = Constants.PlaybackSpeedMinimum;
+        var newValue = PlaybackSpeedSlider.Value - AppConstants.PlaybackSpeedIncrement;
+        if (newValue <= AppConstants.PlaybackSpeedMinimum) newValue = AppConstants.PlaybackSpeedMinimum;
         PlaybackSpeedSlider.Value = newValue;
     }
 
@@ -291,17 +299,84 @@ public sealed partial class NewMiniPlayerPage : Page
         PlayerViewModel.SetTimer(0);
     }
 
+    private T? GetFlyoutElement<T>(object sender, string name) where T : FrameworkElement
+    {
+        if (sender is Flyout flyout && flyout.Content is FrameworkElement root)
+            return root.FindName(name) as T;
+        return null;
+    }
+
+    private async void BookmarksFlyout_Opened(object sender, object e)
+    {
+        if (PlayerViewModel.NowPlaying == null) return;
+        var items = await App.Repository.Bookmarks.GetByAudiobookAsync(PlayerViewModel.NowPlaying.Id);
+        _bookmarks = new System.Collections.ObjectModel.ObservableCollection<Audibly.Models.Bookmark>(items.OrderBy(b => b.PositionMs));
+        var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
+        if (list != null) list.ItemsSource = _bookmarks;
+    }
+
+    private async void AddBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (PlayerViewModel.NowPlaying == null) return;
+        try
+        {
+            var noteBox = GetFlyoutElement<TextBox>(sender, "BookmarksNoteTextBox");
+            var noteText = noteBox?.Text ?? string.Empty;
+            var note = string.IsNullOrWhiteSpace(noteText) ? DateTime.Now.ToString("MM/dd/yyyy hh:ss") : noteText;
+            var bookmark = new Audibly.Models.Bookmark
+            {
+                AudiobookId = PlayerViewModel.NowPlaying.Id,
+                Note = note,
+                PositionMs = (long)PlayerViewModel.CurrentPosition.TotalMilliseconds,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
+            if (saved == null) return;
+            var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
+            _bookmarks.Insert(index, saved);
+            if (noteBox != null) noteBox.Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
+        {
+            try
+            {
+                await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
+                _bookmarks.Remove(bookmark);
+            }
+            catch (Exception ex)
+            {
+                App.ViewModel.LoggingService?.LogError(ex, true);
+            }
+        }
+    }
+
+    private void NowPlayingBar_OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
+    {
+        Slider_OnPointerCaptureLost(sender, e);
+    }
+
     private void EndOfChapterTimerMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (PlayerViewModel.NowPlaying?.CurrentChapter == null) return;
-
         var endTime = PlayerViewModel.NowPlaying.CurrentChapter.EndTime;
         var currentPosition = PlayerViewModel.CurrentPosition.TotalMilliseconds;
         var timerDuration = endTime - currentPosition;
-
-        // convert to seconds
         timerDuration = timerDuration.ToSeconds().ToInt();
-
         if (timerDuration > 0) PlayerViewModel.SetTimer(timerDuration);
     }
+
+    private void BookmarkItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
+            PlayerViewModel.JumpToPosition(bookmark.PositionMs);
+    }
+
 }

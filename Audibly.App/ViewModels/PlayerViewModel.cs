@@ -425,12 +425,38 @@ public class PlayerViewModel : BindableBase, IDisposable
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
     }
 
+    public void JumpToPosition(long positionMs)
+    {
+        if (NowPlaying == null) return;
+        // find chapter containing position
+        var chapter = NowPlaying.Chapters.FirstOrDefault(c => positionMs >= c.StartTime && positionMs < c.EndTime);
+        if (chapter == null)
+        {
+            // fallback: just set current position
+            CurrentPosition = TimeSpan.FromMilliseconds(positionMs);
+            NowPlaying.CurrentTimeMs = (int)positionMs;
+            return;
+        }
+        var targetSourceIndex = chapter.ParentSourceFileIndex;
+        var targetChapterIndex = chapter.Index;
+        // set current time before changing source so MediaOpened can seek correctly
+        NowPlaying.CurrentTimeMs = (int)positionMs;
+        if (NowPlaying.CurrentSourceFileIndex != targetSourceIndex)
+        {
+            OpenSourceFile(targetSourceIndex, targetChapterIndex);
+        }
+        else
+        {
+            CurrentPosition = TimeSpan.FromMilliseconds(positionMs);
+        }
+    }
+
     public async void OpenSourceFile(int index, int chapterIndex)
     {
         if (NowPlaying == null || NowPlaying.CurrentSourceFileIndex == index)
             return;
 
-        NowPlaying.CurrentTimeMs = 0;
+        // Do not reset CurrentTimeMs; it may be set by JumpToPosition
         NowPlaying.CurrentSourceFileIndex = index;
         NowPlaying.CurrentChapterIndex = chapterIndex;
 

@@ -89,6 +89,27 @@ namespace Audibly.Repository.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "Bookmarks",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Note = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    PositionMs = table.Column<long>(type: "INTEGER", nullable: false),
+                    AudiobookId = table.Column<Guid>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Bookmarks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Bookmarks_Audiobooks_AudiobookId",
+                        column: x => x.AudiobookId,
+                        principalTable: "Audiobooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_Audiobooks_Author_Title",
                 table: "Audiobooks",
@@ -104,11 +125,19 @@ namespace Audibly.Repository.Migrations
                 name: "IX_SourceFiles_AudiobookId",
                 table: "SourceFiles",
                 column: "AudiobookId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Bookmarks_AudiobookId",
+                table: "Bookmarks",
+                column: "AudiobookId");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "Bookmarks");
+
             migrationBuilder.DropTable(
                 name: "Chapters");
 

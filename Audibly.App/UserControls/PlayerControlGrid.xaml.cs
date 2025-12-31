@@ -2,10 +2,13 @@
 // Updated: 12/26/2025
 
 using System;
+using System.Linq;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Audibly.App.Extensions;
 using Audibly.App.Helpers;
+using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.App.Views;
 using Audibly.Models;
@@ -27,6 +30,8 @@ public sealed partial class PlayerControlGrid : UserControl
 
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private CancellationTokenSource? _playbackSpeedFlyoutCts;
+
+    private ObservableCollection<Bookmark> _bookmarks = new();
 
     public PlayerControlGrid()
     {
@@ -193,6 +198,73 @@ public sealed partial class PlayerControlGrid : UserControl
         timerDuration = timerDuration.ToSeconds().ToInt();
 
         if (timerDuration > 0) PlayerViewModel.SetTimer(timerDuration);
+    }
+
+    private T? GetFlyoutElement<T>(object sender, string name) where T : FrameworkElement
+    {
+        if (sender is Flyout flyout && flyout.Content is FrameworkElement root)
+            return root.FindName(name) as T;
+        return null;
+    }
+
+    private async void BookmarksFlyout_Opened(object sender, object e)
+    {
+        if (PlayerViewModel.NowPlaying == null) return;
+        var items = await App.Repository.Bookmarks.GetByAudiobookAsync(PlayerViewModel.NowPlaying.Id);
+        _bookmarks = new ObservableCollection<Bookmark>(items.OrderBy(b => b.PositionMs));
+        var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
+        if (list != null) list.ItemsSource = _bookmarks;
+    }
+
+    private async void AddBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (PlayerViewModel.NowPlaying == null) return;
+        try
+        {
+            var noteBox = GetFlyoutElement<TextBox>(((sender as Button)?.Parent as Grid)?.Parent as Flyout ?? sender, "BookmarksNoteTextBox") ?? GetFlyoutElement<TextBox>(sender, "BookmarksNoteTextBox");
+            var noteText = noteBox?.Text ?? string.Empty;
+            var note = string.IsNullOrWhiteSpace(noteText) ? DateTime.Now.ToString("MM/dd/yyyy hh:ss") : noteText;
+
+            var bookmark = new Bookmark
+            {
+                AudiobookId = PlayerViewModel.NowPlaying.Id,
+                Note = note,
+                PositionMs = (long)PlayerViewModel.CurrentPosition.TotalMilliseconds,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
+            if (saved == null) return;
+            var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
+            _bookmarks.Insert(index, saved);
+            if (noteBox != null) noteBox.Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    private void BookmarkItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is Bookmark bookmark)
+            PlayerViewModel.JumpToPosition(bookmark.PositionMs);
+    }
+
+    private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is Bookmark bookmark)
+        {
+            try
+            {
+                await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
+                _bookmarks.Remove(bookmark);
+            }
+            catch (Exception ex)
+            {
+                App.ViewModel.LoggingService?.LogError(ex, true);
+            }
+        }
     }
 
     // Public API used by AppShell to adjust speed via '[' and ']'
