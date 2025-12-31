@@ -428,26 +428,50 @@ public class PlayerViewModel : BindableBase, IDisposable
     public void JumpToPosition(long positionMs)
     {
         if (NowPlaying == null) return;
-        // find chapter containing position
-        var chapter = NowPlaying.Chapters.FirstOrDefault(c => positionMs >= c.StartTime && positionMs < c.EndTime);
-        if (chapter == null)
+
+        // 1) Find the correct source file by walking durations (seconds) and comparing against absolute ms position
+        var sourceFiles = NowPlaying.SourcePaths;
+        if (sourceFiles == null || sourceFiles.Count == 0) return;
+
+        var cumulativeMs = 0L; // cumulative duration across source files in milliseconds
+        var targetSourceIndex = 0;
+        for (var i = 0; i < sourceFiles.Count; i++)
         {
-            // fallback: just set current position
-            CurrentPosition = TimeSpan.FromMilliseconds(positionMs);
-            NowPlaying.CurrentTimeMs = (int)positionMs;
-            return;
+            var fileDurationMs = sourceFiles[i].Duration * 1000; // Duration is in seconds; convert to ms
+            if (positionMs < cumulativeMs + fileDurationMs)
+            {
+                targetSourceIndex = i;
+                break;
+            }
+            cumulativeMs += fileDurationMs;
         }
-        var targetSourceIndex = chapter.ParentSourceFileIndex;
-        var targetChapterIndex = chapter.Index;
-        // set current time before changing source so MediaOpened can seek correctly
+
+        // 2) Compute the position relative to the found source file
+        var positionWithinSourceMs = positionMs - cumulativeMs;
+        if (positionWithinSourceMs < 0) positionWithinSourceMs = 0;
+
+        // 3) Find the chapter within the target source file by relative position
+        var chapter = NowPlaying.Chapters
+            .FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceIndex &&
+                                 positionWithinSourceMs >= c.StartTime &&
+                                 positionWithinSourceMs < c.EndTime);
+
+        // 4) Update current time and navigate
+        // Set absolute CurrentTimeMs to the bookmark position
         NowPlaying.CurrentTimeMs = (int)positionMs;
+
         if (NowPlaying.CurrentSourceFileIndex != targetSourceIndex)
         {
+            // Switch source file and set chapter index accordingly
+            var targetChapterIndex = chapter?.Index ?? NowPlaying.CurrentChapterIndex ?? 0;
             OpenSourceFile(targetSourceIndex, targetChapterIndex);
+            // Let MediaOpened handler seek using NowPlaying.CurrentTimeMs (already absolute)
+            CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
         }
         else
         {
-            CurrentPosition = TimeSpan.FromMilliseconds(positionMs);
+            // Same source file: set direct playback position
+            CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
         }
     }
 

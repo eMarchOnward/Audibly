@@ -39,6 +39,7 @@ public sealed partial class NewMiniPlayerPage : Page
     private bool _wasPlayingBeforeDrag = false;
 
     private ObservableCollection<Bookmark> _bookmarks = new();
+    private readonly BookmarkService _bookmarkService = new();
 
     public NewMiniPlayerPage()
     {
@@ -82,7 +83,7 @@ public sealed partial class NewMiniPlayerPage : Page
             ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
-        else if (key == (VirtualKey)0xDC) // Backslash '\'
+        else if (key == (VirtualKey)0xDC) // Backslash '\\'
         {
             ResetPlaybackSpeed();
             ClosePlaybackSpeedFlyout();
@@ -309,8 +310,7 @@ public sealed partial class NewMiniPlayerPage : Page
     private async void BookmarksFlyout_Opened(object sender, object e)
     {
         if (PlayerViewModel.NowPlaying == null) return;
-        var items = await App.Repository.Bookmarks.GetByAudiobookAsync(PlayerViewModel.NowPlaying.Id);
-        _bookmarks = new System.Collections.ObjectModel.ObservableCollection<Audibly.Models.Bookmark>(items.OrderBy(b => b.PositionMs));
+        _bookmarks = await _bookmarkService.GetBookmarksAsync(PlayerViewModel.NowPlaying.Id);
         var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
         if (list != null) list.ItemsSource = _bookmarks;
     }
@@ -326,20 +326,8 @@ public sealed partial class NewMiniPlayerPage : Page
             var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
 
             var noteText = noteBox?.Text?.Trim() ?? string.Empty;
-            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
-
-            var bookmark = new Audibly.Models.Bookmark
-            {
-                AudiobookId = PlayerViewModel.NowPlaying.Id,
-                Note = note,
-                PositionMs = (long)PlayerViewModel.CurrentPosition.TotalMilliseconds,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-
-            var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
+            var saved = await _bookmarkService.AddBookmarkForCurrentPositionAsync(PlayerViewModel, noteText, _bookmarks);
             if (saved == null) return;
-            var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
-            _bookmarks.Insert(index, saved);
 
             if (noteBox != null) noteBox.Text = string.Empty;
         }
@@ -355,8 +343,7 @@ public sealed partial class NewMiniPlayerPage : Page
             try
             {
                 button.IsEnabled = false; // prevent double-click re-entrancy
-                await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
-                _bookmarks.Remove(bookmark);
+                await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
             {
@@ -391,8 +378,16 @@ public sealed partial class NewMiniPlayerPage : Page
 
     private void BookmarkItem_Click(object sender, RoutedEventArgs e)
     {
+        // remember play status so we can resume if it was playing before navigation
+        var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
         if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
-            PlayerViewModel.JumpToPosition(bookmark.PositionMs);
+            _bookmarkService.NavigateToBookmark(bookmark);
+
+        // If playback was ongoing before navigation, resume it.
+        // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
+        if (wasPlaying)
+            PlayerViewModel.MediaPlayer.Play();
     }
 
 }

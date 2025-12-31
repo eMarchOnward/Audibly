@@ -1,11 +1,6 @@
 // Author: rstewa · https://github.com/rstewa
 // Updated: 12/26/2025
 
-using System;
-using System.Linq;
-using System.Collections.ObjectModel;
-using System.Threading;
-using System.Threading.Tasks;
 using Audibly.App.Extensions;
 using Audibly.App.Helpers;
 using Audibly.App.Services;
@@ -16,6 +11,12 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using System;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Windows.Media.Playback;
 using Windows.System;
 using Constants = Audibly.App.Helpers.Constants;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
@@ -32,13 +33,14 @@ public sealed partial class PlayerControlGrid : UserControl
     private CancellationTokenSource? _playbackSpeedFlyoutCts;
 
     private ObservableCollection<Bookmark> _bookmarks = new();
+    private readonly BookmarkService _bookmarkService = new();
 
     public PlayerControlGrid()
     {
         InitializeComponent();
         AudioPlayer.SetMediaPlayer(PlayerViewModel.MediaPlayer);
 
-        // allow '[' ']' and '\' to work while the playback-speed flyout is open
+        // allow '[' ']' and '\\' to work while the playback-speed flyout is open
         if (PlaybackSpeedSlider != null)
             PlaybackSpeedSlider.KeyDown += PlaybackSpeedSlider_KeyDown;
 
@@ -93,9 +95,17 @@ public sealed partial class PlayerControlGrid : UserControl
         if (PlayerViewModel.NowPlaying != null &&
             PlayerViewModel.NowPlaying.CurrentSourceFile.Index != newChapter.ParentSourceFileIndex)
         {
+            // remember play status so we can resume if it was playing before navigation
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
             // set the current source file index to the new source file index
             PlayerViewModel.OpenSourceFile(newChapter.ParentSourceFileIndex, newChapter.Index);
             PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(newChapter.StartTime);
+
+            // If playback was ongoing before navigation, resume it.
+            // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Play();
         }
         else if (ChapterCombo.SelectedIndex != ChapterCombo.Items.IndexOf(PlayerViewModel.NowPlaying?.CurrentChapter))
         {
@@ -210,8 +220,7 @@ public sealed partial class PlayerControlGrid : UserControl
     private async void BookmarksFlyout_Opened(object sender, object e)
     {
         if (PlayerViewModel.NowPlaying == null) return;
-        var items = await App.Repository.Bookmarks.GetByAudiobookAsync(PlayerViewModel.NowPlaying.Id);
-        _bookmarks = new ObservableCollection<Bookmark>(items.OrderBy(b => b.PositionMs));
+        _bookmarks = await _bookmarkService.GetBookmarksAsync(PlayerViewModel.NowPlaying.Id);
         var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
         if (list != null) list.ItemsSource = _bookmarks;
     }
@@ -227,20 +236,8 @@ public sealed partial class PlayerControlGrid : UserControl
             var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
 
             var noteText = noteBox?.Text?.Trim() ?? string.Empty;
-            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
-
-            var bookmark = new Bookmark
-            {
-                AudiobookId = PlayerViewModel.NowPlaying.Id,
-                Note = note,
-                PositionMs = (long)PlayerViewModel.CurrentPosition.TotalMilliseconds,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-
-            var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
+            var saved = await _bookmarkService.AddBookmarkForCurrentPositionAsync(PlayerViewModel, noteText, _bookmarks);
             if (saved == null) return;
-            var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
-            _bookmarks.Insert(index, saved);
 
             if (noteBox != null) noteBox.Text = string.Empty;
         }
@@ -253,7 +250,17 @@ public sealed partial class PlayerControlGrid : UserControl
     private void BookmarkItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is Bookmark bookmark)
-            PlayerViewModel.JumpToPosition(bookmark.PositionMs);
+        {
+            // remember play status so we can resume if it was playing before navigation
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
+            _bookmarkService.NavigateToBookmark(bookmark);
+
+            // If playback was ongoing before navigation, resume it.
+            // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Play();
+        }
     }
 
     private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
@@ -263,8 +270,7 @@ public sealed partial class PlayerControlGrid : UserControl
             try
             {
                 button.IsEnabled = false; // prevent double-click re-entrancy
-                await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
-                _bookmarks.Remove(bookmark);
+                await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
             {
@@ -352,7 +358,7 @@ public sealed partial class PlayerControlGrid : UserControl
             IncreasePlaybackSpeed();
             e.Handled = true;
         }
-        else if (key == (VirtualKey)0xDC) // backslash '\'
+        else if (key == (VirtualKey)0xDC) // backslash '\\'
         {
             ResetPlaybackSpeed();
             e.Handled = true;
@@ -375,7 +381,7 @@ public sealed partial class PlayerControlGrid : UserControl
             ClosePlaybackSpeedFlyout();
             e.Handled = true;
         }
-        else if (key == (VirtualKey)0xDC) // Backslash '\'
+        else if (key == (VirtualKey)0xDC) // Backslash '\\'
         {
             ResetPlaybackSpeed();
             ClosePlaybackSpeedFlyout();

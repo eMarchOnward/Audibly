@@ -30,6 +30,7 @@ public sealed partial class AudiobookTile : UserControl
 {
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private ObservableCollection<Audibly.Models.Bookmark> _bookmarks = new();
+    private readonly BookmarkService _bookmarkService = new();
 
     public AudiobookTile()
     {
@@ -263,7 +264,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
-        var dir = Path.GetDirectoryName(audiobook.CoverImagePath);
+        var dir = System.IO.Path.GetDirectoryName(audiobook.CoverImagePath);
         if (dir == null) return;
         Process p = new();
         p.StartInfo.FileName = "explorer.exe";
@@ -322,8 +323,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
-        var items = await App.Repository.Bookmarks.GetByAudiobookAsync(audiobook.Id);
-        _bookmarks = new System.Collections.ObjectModel.ObservableCollection<Audibly.Models.Bookmark>(items.OrderBy(b => b.PositionMs));
+        _bookmarks = await _bookmarkService.GetBookmarksAsync(audiobook.Id);
         var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
         if (list != null) list.ItemsSource = _bookmarks;
     }
@@ -340,19 +340,8 @@ public sealed partial class AudiobookTile : UserControl
             var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
 
             var noteText = noteBox?.Text?.Trim() ?? string.Empty;
-            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
-
-            var bookmark = new Audibly.Models.Bookmark
-            {
-                AudiobookId = audiobook.Id,
-                Note = note,
-                PositionMs = (long)App.PlayerViewModel.CurrentPosition.TotalMilliseconds,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
+            var saved = await _bookmarkService.AddBookmarkForCurrentPositionAsync(App.PlayerViewModel, noteText, _bookmarks);
             if (saved == null) return;
-            var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
-            _bookmarks.Insert(index, saved);
             if (noteBox != null) noteBox.Text = string.Empty;
         }
         catch (Exception ex)
@@ -364,7 +353,7 @@ public sealed partial class AudiobookTile : UserControl
     private void BookmarkItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
-            App.PlayerViewModel.JumpToPosition(bookmark.PositionMs);
+            _bookmarkService.NavigateToBookmark(bookmark);
     }
 
     private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
@@ -374,8 +363,7 @@ public sealed partial class AudiobookTile : UserControl
             try
             {
                 button.IsEnabled = false; // prevent double-click re-entrancy
-                await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
-                _bookmarks.Remove(bookmark);
+                await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
             {

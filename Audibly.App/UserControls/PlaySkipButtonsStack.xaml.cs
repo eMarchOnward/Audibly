@@ -1,10 +1,11 @@
 // Author: rstewa · https://github.com/rstewa
 // Updated: 02/14/2025
 
-using System;
 using Audibly.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System;
+using Windows.Media.Playback;
 
 namespace Audibly.App.UserControls;
 
@@ -76,11 +77,19 @@ public sealed partial class PlaySkipButtonsStack : UserControl
             PlayerViewModel.NowPlaying?.Chapters[(int)(PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1)]
                 .ParentSourceFileIndex != PlayerViewModel.NowPlaying?.CurrentSourceFileIndex)
         {
+            // remember play status so we can resume if it was playing before navigation
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
             var newChapterIdx = (int)PlayerViewModel.NowPlaying.CurrentChapterIndex - 1;
             PlayerViewModel.OpenSourceFile(PlayerViewModel.NowPlaying.CurrentSourceFileIndex - 1, newChapterIdx);
             PlayerViewModel.CurrentPosition =
                 TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.Chapters[newChapterIdx].StartTime);
             await PlayerViewModel.NowPlaying.SaveAsync();
+
+            // If playback was ongoing before navigation, resume it.
+            // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Play();
 
             return;
         }
@@ -112,11 +121,19 @@ public sealed partial class PlaySkipButtonsStack : UserControl
             PlayerViewModel.NowPlaying?.Chapters[(int)(PlayerViewModel.NowPlaying?.CurrentChapterIndex + 1)]
                 .ParentSourceFileIndex != PlayerViewModel.NowPlaying?.CurrentSourceFileIndex)
         {
+            // remember play status so we can resume if it was playing before navigation
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
             var newChapterIdx = (int)PlayerViewModel.NowPlaying.CurrentChapterIndex + 1;
             PlayerViewModel.OpenSourceFile(PlayerViewModel.NowPlaying.CurrentSourceFileIndex + 1, newChapterIdx);
             PlayerViewModel.CurrentPosition =
                 TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.Chapters[newChapterIdx].StartTime);
             await PlayerViewModel.NowPlaying.SaveAsync();
+
+            // If playback was ongoing before navigation, resume it.
+            // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Play();
 
             return;
         }
@@ -127,6 +144,9 @@ public sealed partial class PlaySkipButtonsStack : UserControl
                 : PlayerViewModel.NowPlaying.CurrentChapterIndex;
 
         if (newChapterIndex == null) return;
+
+        // If there is no next chapter, do nothing.
+        if (PlayerViewModel.NowPlaying.CurrentChapterIndex == newChapterIndex) return;
 
         // PlayerViewModel.NowPlaying.CurrentChapter = PlayerViewModel.NowPlaying.Chapters[(int)newChapterIndex];
         PlayerViewModel.NowPlaying.CurrentChapterIndex = newChapterIndex;
