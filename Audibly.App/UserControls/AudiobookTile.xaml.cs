@@ -334,9 +334,14 @@ public sealed partial class AudiobookTile : UserControl
         if (audiobook == null) return;
         try
         {
-            var noteBox = GetFlyoutElement<TextBox>(sender, "BookmarksNoteTextBox");
-            var noteText = noteBox?.Text ?? string.Empty;
-            var note = string.IsNullOrWhiteSpace(noteText) ? DateTime.Now.ToString("MM/dd/yyyy hh:ss") : noteText;
+            // Resolve the note TextBox from this control's Flyout content
+            var flyout = BookmarksButton?.Flyout as Flyout;
+            var root = flyout?.Content as FrameworkElement;
+            var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+
+            var noteText = noteBox?.Text?.Trim() ?? string.Empty;
+            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
+
             var bookmark = new Audibly.Models.Bookmark
             {
                 AudiobookId = audiobook.Id,

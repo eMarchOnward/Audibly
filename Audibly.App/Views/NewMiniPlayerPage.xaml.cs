@@ -149,11 +149,11 @@ public sealed partial class NewMiniPlayerPage : Page
     private void Slider_OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         // Only consider it a drag start if the pointer is pressed over the slider
-        if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse && 
+        if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse &&
             e.GetCurrentPoint(PositionSlider).Properties.IsLeftButtonPressed)
         {
             _isUserDragging = true;
-            
+
             // Check if currently playing and pause if so
             _wasPlayingBeforeDrag = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
             if (_wasPlayingBeforeDrag)
@@ -166,11 +166,11 @@ public sealed partial class NewMiniPlayerPage : Page
     private void Slider_OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
         // Confirm we're in a drag operation if we're moving with button pressed
-        if (!_isUserDragging && 
+        if (!_isUserDragging &&
             e.GetCurrentPoint(PositionSlider).Properties.IsLeftButtonPressed)
         {
             _isUserDragging = true;
-            
+
             // Check if currently playing and pause if so
             _wasPlayingBeforeDrag = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
             if (_wasPlayingBeforeDrag)
@@ -183,9 +183,9 @@ public sealed partial class NewMiniPlayerPage : Page
     private async void Slider_OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
         if (!_isUserDragging) return;
-        
+
         _isUserDragging = false;
-        
+
         if (PlayerViewModel.NowPlaying?.CurrentChapter == null) return;
 
         // Update the playback position
@@ -193,7 +193,7 @@ public sealed partial class NewMiniPlayerPage : Page
             TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime + PositionSlider.Value);
 
         await PlayerViewModel.NowPlaying.SaveAsync();
-        
+
         // Resume playback if it was playing before drag
         if (_wasPlayingBeforeDrag)
         {
@@ -204,9 +204,9 @@ public sealed partial class NewMiniPlayerPage : Page
     private async void Slider_OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
     {
         if (!_isUserDragging) return;
-        
+
         _isUserDragging = false;
-        
+
         if (PlayerViewModel.NowPlaying?.CurrentChapter != null)
         {
             PlayerViewModel.CurrentPosition =
@@ -214,7 +214,7 @@ public sealed partial class NewMiniPlayerPage : Page
 
             await PlayerViewModel.NowPlaying.SaveAsync();
         }
-        
+
         // Resume playback if it was playing before drag
         if (_wasPlayingBeforeDrag)
         {
@@ -320,9 +320,14 @@ public sealed partial class NewMiniPlayerPage : Page
         if (PlayerViewModel.NowPlaying == null) return;
         try
         {
-            var noteBox = GetFlyoutElement<TextBox>(sender, "BookmarksNoteTextBox");
-            var noteText = noteBox?.Text ?? string.Empty;
-            var note = string.IsNullOrWhiteSpace(noteText) ? DateTime.Now.ToString("MM/dd/yyyy hh:ss") : noteText;
+            // Resolve the note TextBox from this page's Flyout content
+            var flyout = BookmarksButton?.Flyout as Flyout;
+            var root = flyout?.Content as FrameworkElement;
+            var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+
+            var noteText = noteBox?.Text?.Trim() ?? string.Empty;
+            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
+
             var bookmark = new Audibly.Models.Bookmark
             {
                 AudiobookId = PlayerViewModel.NowPlaying.Id,
@@ -330,10 +335,12 @@ public sealed partial class NewMiniPlayerPage : Page
                 PositionMs = (long)PlayerViewModel.CurrentPosition.TotalMilliseconds,
                 CreatedAtUtc = DateTime.UtcNow
             };
+
             var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
             if (saved == null) return;
             var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
             _bookmarks.Insert(index, saved);
+
             if (noteBox != null) noteBox.Text = string.Empty;
         }
         catch (Exception ex)
@@ -341,7 +348,6 @@ public sealed partial class NewMiniPlayerPage : Page
             App.ViewModel.LoggingService?.LogError(ex, true);
         }
     }
-
     private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)

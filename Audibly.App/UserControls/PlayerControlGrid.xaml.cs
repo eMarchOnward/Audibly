@@ -221,9 +221,13 @@ public sealed partial class PlayerControlGrid : UserControl
         if (PlayerViewModel.NowPlaying == null) return;
         try
         {
-            var noteBox = GetFlyoutElement<TextBox>(((sender as Button)?.Parent as Grid)?.Parent as Flyout ?? sender, "BookmarksNoteTextBox") ?? GetFlyoutElement<TextBox>(sender, "BookmarksNoteTextBox");
-            var noteText = noteBox?.Text ?? string.Empty;
-            var note = string.IsNullOrWhiteSpace(noteText) ? DateTime.Now.ToString("MM/dd/yyyy hh:ss") : noteText;
+            // Resolve the note TextBox from this control's Flyout content
+            var flyout = BookmarksButton?.Flyout as Flyout;
+            var root = flyout?.Content as FrameworkElement;
+            var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+
+            var noteText = noteBox?.Text?.Trim() ?? string.Empty;
+            var note = noteText.Length > 0 ? noteText : DateTime.Now.ToString("MM/dd/yyyy HH:mm");
 
             var bookmark = new Bookmark
             {
@@ -237,6 +241,7 @@ public sealed partial class PlayerControlGrid : UserControl
             if (saved == null) return;
             var index = _bookmarks.TakeWhile(b => b.PositionMs < saved.PositionMs).Count();
             _bookmarks.Insert(index, saved);
+
             if (noteBox != null) noteBox.Text = string.Empty;
         }
         catch (Exception ex)

@@ -38,39 +38,61 @@ public class AppDataService : IAppDataService
         try
         {
             string coverImagePath;
-            var bookAppdataDir = await StorageFolder.CreateFolderAsync(path,
-                CreationCollisionOption.OpenIfExists);
+            var bookAppdataDir = await StorageFolder.CreateFolderAsync(path, CreationCollisionOption.OpenIfExists);
 
             if (imageBytes == null)
             {
-                var coverImage = await AssetHelper.GetAssetFileAsync("DefaultCoverImage.png");
-                await coverImage.CopyAsync(bookAppdataDir, "CoverImage.png", NameCollisionOption.ReplaceExisting);
-                coverImagePath = coverImage.Path;
+                var defaultCover = await AssetHelper.GetAssetFileAsync("DefaultCoverImage.png");
+                // Copy default image into the per-book app-data folder
+                await defaultCover.CopyAsync(bookAppdataDir, "CoverImage.png", NameCollisionOption.ReplaceExisting);
+                // Use the copied file path in app-data, not the asset's path
+                coverImagePath = Path.Combine(bookAppdataDir.Path, "CoverImage.png");
             }
             else
             {
-                var coverImage =
-                    await bookAppdataDir.CreateFileAsync("CoverImage.png", CreationCollisionOption.ReplaceExisting);
+                var coverImage = await bookAppdataDir.CreateFileAsync("CoverImage.png", CreationCollisionOption.ReplaceExisting);
                 await FileIO.WriteBytesAsync(coverImage, imageBytes);
                 coverImagePath = coverImage.Path;
             }
 
-            // create 400x400 thumbnail
+            // Create 400x400 thumbnail next to the cover
             var thumbnailPath = Path.Combine(bookAppdataDir.Path, "Thumbnail.jpeg");
             var result = await ShrinkAndSaveAsync(coverImagePath, thumbnailPath, 400, 400);
-            if (!result) thumbnailPath = coverImagePath; // use full size image if thumbnail creation fails
-
-            // leaving this commented out for now because it increases the import time an absurd amount
-            // create .ico file
-            // var coverImagePath = Path.Combine(bookAppdataDir.Path, "CoverImage.png");
-            // FolderIcon.SetFolderIcon(coverImagePath, bookAppdataDir.Path);
+            if (!result)
+            {
+                // If resizing fails, just reuse the original cover path
+                thumbnailPath = coverImagePath;
+            }
 
             return new Tuple<string, string>(coverImagePath, thumbnailPath);
         }
         catch (Exception e)
         {
             App.ViewModel.LoggingService.LogError(e, true);
-            return new Tuple<string, string>(string.Empty, string.Empty);
+
+            // Second-chance fallback: still try to place a local default cover so UI gets a valid file path.
+            try
+            {
+                var bookAppdataDir = await StorageFolder.CreateFolderAsync(path, CreationCollisionOption.OpenIfExists);
+                var defaultCover = await AssetHelper.GetAssetFileAsync("DefaultCoverImage.png");
+                await defaultCover.CopyAsync(bookAppdataDir, "CoverImage.png", NameCollisionOption.ReplaceExisting);
+                var localCover = Path.Combine(bookAppdataDir.Path, "CoverImage.png");
+                var localThumb = Path.Combine(bookAppdataDir.Path, "Thumbnail.jpeg");
+
+                // Best-effort thumbnail; ignore failure
+                var _ = await ShrinkAndSaveAsync(localCover, localThumb, 400, 400);
+                if (!File.Exists(localThumb)) localThumb = localCover;
+
+                return new Tuple<string, string>(localCover, localThumb);
+            }
+            catch
+            {
+                // Final fallback: packaged asset (UI should still show this via converter)
+                return new Tuple<string, string>(
+                    "ms-appx:///Assets/DefaultCoverImage.png",
+                    "ms-appx:///Assets/DefaultCoverImage.png"
+                );
+            }
         }
     }
 
@@ -187,15 +209,24 @@ public class AppDataService : IAppDataService
     {
         try
         {
-            using var image = await Image.LoadAsync(path);
+            // Ensure destination directory exists
+            var dir = Path.GetDirectoryName(savePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            await using var fs = File.OpenRead(path);
+            using var image = await Image.LoadAsync(fs);
             if (ResizeNeeded(image.Height, image.Width, maxHeight, maxWidth, out var newHeight, out var newWidth))
+            {
                 image.Mutate(x => x.Resize(new ResizeOptions
                 {
                     Size = new Size(newWidth, newHeight)
                 }));
+            }
 
             await image.SaveAsync(savePath);
-
             return true;
         }
         catch (Exception e)
