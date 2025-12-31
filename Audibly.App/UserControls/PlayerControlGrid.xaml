@@ -109,7 +109,8 @@
                             SelectionChanged="ChapterCombo_SelectionChanged"
                             ToolTipService.ToolTip="Chapter Selection"
                             VerticalAlignment="Top"
-                            x:Name="ChapterCombo">
+                            x:Name="ChapterCombo"
+                            IsTabStop="False">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="models:ChapterInfo">
                                     <TextBlock
@@ -135,7 +136,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         ToolTipService.ToolTip="Bookmarks"
-                        x:Name="BookmarksButton">
+                        x:Name="BookmarksButton"
+                        IsTabStop="False">
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8A5;" />
                         <Button.Flyout>
                             <Flyout Opened="BookmarksFlyout_Opened">
@@ -185,7 +187,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         ToolTipService.ToolTip="Volume Level"
-                        x:Name="VolumeLevelButton">
+                        x:Name="VolumeLevelButton"
+                        IsTabStop="False">
                         <FontIcon
                             FontFamily="Segoe MDL2 Assets"
                             Glyph="{x:Bind PlayerViewModel.VolumeLevelGlyph, Mode=OneWay}"
@@ -230,7 +233,8 @@
                         Background="Transparent"
                         BorderThickness="0"
                         ToolTipService.ToolTip="Playback Speed"
-                        x:Name="PlaybackSpeedButton">
+                        x:Name="PlaybackSpeedButton"
+                        IsTabStop="False">
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xEC57;" />
                         <!--  Glyph="{x:Bind AudiobookViewModel.Audiobook.PlaybackGlyph}" />  -->
                         <Button.Flyout>
@@ -273,7 +277,8 @@
                         BorderThickness="0"
                         Click="TimerButton_OnClick"
                         ToolTipService.ToolTip="Sleep Timer"
-                        x:Name="TimerButton">
+                        x:Name="TimerButton"
+                        IsTabStop="False">
 
                         <Grid>
                             <!--  Timer Icon  -->
@@ -359,7 +364,8 @@
                         BorderThickness="0"
                         Click="MaximizePlayerButton_OnClick"
                         ToolTipService.ToolTip="Maximize Player"
-                        x:Name="MaximizeMinimizeButton">
+                        x:Name="MaximizeMinimizeButton"
+                        IsTabStop="False">
                         <Button.KeyboardAccelerators>
                             <KeyboardAccelerator IsEnabled="{x:Bind vm:Converters.Not(PlayerViewModel.IsPlayerFullScreen), Mode=OneWay}" Key="F11" />
                             <KeyboardAccelerator IsEnabled="{x:Bind PlayerViewModel.IsPlayerFullScreen, Mode=OneWay}" Key="Escape" />
@@ -373,7 +379,8 @@
                         BorderThickness="0"
                         Click="OpenMiniPlayerButton_OnClick"
                         ToolTipService.ToolTip="Open Mini Player"
-                        x:Name="OpenInNewWindowButton">
+                        x:Name="OpenInNewWindowButton"
+                        IsTabStop="False">
                         <FontIcon
                             FontFamily="{StaticResource AudiblyCustomFont}"
                             FontSize="30"

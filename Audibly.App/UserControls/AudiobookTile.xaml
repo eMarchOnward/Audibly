@@ -187,8 +187,6 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="BookmarksNoteTextBox" Grid.Column="0" PlaceholderText="Enter note or leave blank for timestamp" MaxLength="100" />
-                                        <Button Grid.Column="1" Content="Add" Click="AddBookmark_Click" />
                                     </Grid>
                                     <ListView x:Name="BookmarksListView" SelectionMode="None" MaxHeight="300">
                                         <ListView.ItemTemplate>

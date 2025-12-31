@@ -46,6 +46,7 @@ public sealed partial class NewMiniPlayerPage : Page
         InitializeComponent();
         _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         Loaded += NewMiniPlayerPage_Loaded;
+        Unloaded += NewMiniPlayerPage_Unloaded;
     }
 
     /// <summary>
@@ -66,6 +67,19 @@ public sealed partial class NewMiniPlayerPage : Page
         PositionSlider.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Slider_OnPointerMoved), true);
         PositionSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Slider_OnPointerReleased), true);
         PositionSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Slider_OnPointerCaptureLost), true);
+
+        // Wire keyboard handling so the page receives KeyDown events.
+        // Ensures the page has focus and listens for key presses (Up/Down, [, ], backslash).
+        this.KeyDown += NewMiniPlayerPage_KeyDown;
+        // Request focus so that KeyDown will fire when the page is visible.
+        // If another control must keep focus, consider using KeyboardAccelerators instead.
+        _ = this.Focus(FocusState.Programmatic);
+    }
+
+    private void NewMiniPlayerPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        // Clean up handlers attached at Loaded time.
+        this.KeyDown -= NewMiniPlayerPage_KeyDown;
     }
 
     private void NewMiniPlayerPage_KeyDown(object sender, KeyRoutedEventArgs args)
@@ -99,6 +113,18 @@ public sealed partial class NewMiniPlayerPage : Page
         {
             HandleSpeedDecrease();
             ClosePlaybackSpeedFlyout();
+            args.Handled = true;
+        }
+        else if (key == VirtualKey.Space)
+        {
+
+            // Toggle play/pause when Ctrl+Space is pressed
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Pause();
+            else
+                PlayerViewModel.MediaPlayer.Play();
+
             args.Handled = true;
         }
     }

@@ -123,7 +123,8 @@
                     Background="Transparent"
                     BorderThickness="0"
                     ToolTipService.ToolTip="Bookmarks"
-                    x:Name="BookmarksButton">
+                    x:Name="BookmarksButton"
+                    IsTabStop="False">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver">Transparent</SolidColorBrush>
@@ -182,7 +183,8 @@
                     BorderThickness="0"
                     ToolTipService.ToolTip="Volume"
                     VerticalAlignment="Center"
-                    x:Name="VolumeButton">
+                    x:Name="VolumeButton"
+                    IsTabStop="False">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver">Transparent</SolidColorBrush>
@@ -233,7 +235,8 @@
                     Background="Transparent"
                     BorderThickness="0"
                     VerticalAlignment="Center"
-                    x:Name="PlaybackSpeedButton">
+                    x:Name="PlaybackSpeedButton"
+                    IsTabStop="False">
                     <ToolTipService.ToolTip>
                         <TextBlock>
                             <Run Text="Playback Speed" />
@@ -298,7 +301,8 @@
                     Background="Transparent"
                     BorderThickness="0"
                     ToolTipService.ToolTip="Sleep Timer"
-                    x:Name="TimerButton">
+                    x:Name="TimerButton"
+                    IsTabStop="False">
 
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>
@@ -410,7 +414,8 @@
                     HorizontalAlignment="Right"
                     ToolTipService.ToolTip="Pin Mini-Player"
                     VerticalAlignment="Center"
-                    x:Name="PinButton">
+                    x:Name="PinButton"
+                    IsTabStop="False">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver">Transparent</SolidColorBrush>
@@ -453,7 +458,8 @@
                     HorizontalAlignment="Right"
                     ToolTipService.ToolTip="Back to Library"
                     VerticalAlignment="Center"
-                    x:Name="BackToLibraryButton">
+                    x:Name="BackToLibraryButton"
+                    IsTabStop="False">
                     <Button.Resources>
                         <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>
                         <SolidColorBrush x:Key="ButtonBackgroundPointerOver">Transparent</SolidColorBrush>

@@ -399,5 +399,17 @@ public sealed partial class PlayerControlGrid : UserControl
             ClosePlaybackSpeedFlyout();
             e.Handled = true;
         }
+        else if (key == VirtualKey.Space)
+        {
+
+            // Toggle play/pause when Ctrl+Space is pressed
+            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+            if (wasPlaying)
+                PlayerViewModel.MediaPlayer.Pause();
+            else
+                PlayerViewModel.MediaPlayer.Play();
+
+            e.Handled = true;
+        }
     }
 }

@@ -328,32 +328,34 @@ public sealed partial class AudiobookTile : UserControl
         if (list != null) list.ItemsSource = _bookmarks;
     }
 
-    private async void AddBookmark_Click(object sender, RoutedEventArgs e)
+    private async void BookmarkItem_Click(object sender, RoutedEventArgs e)
     {
-        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-        if (audiobook == null) return;
+        if (sender is not Button button) return;
+        if (button.Tag is not Audibly.Models.Bookmark bookmark) return;
+
         try
         {
-            // Resolve the note TextBox from this control's Flyout content
-            var flyout = BookmarksButton?.Flyout as Flyout;
-            var root = flyout?.Content as FrameworkElement;
-            var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+            button.IsEnabled = false; // prevent re-entrancy
 
-            var noteText = noteBox?.Text?.Trim() ?? string.Empty;
-            var saved = await _bookmarkService.AddBookmarkForCurrentPositionAsync(App.PlayerViewModel, noteText, _bookmarks);
-            if (saved == null) return;
-            if (noteBox != null) noteBox.Text = string.Empty;
+            var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+            if (audiobook == null) return;
+
+            // Exceptions from EnqueueAsync will be caught below
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                await PlayerViewModel.OpenAudiobook(audiobook);
+            });
+
+            _bookmarkService.NavigateToBookmark(bookmark);
         }
         catch (Exception ex)
         {
             App.ViewModel.LoggingService?.LogError(ex, true);
         }
-    }
-
-    private void BookmarkItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
-            _bookmarkService.NavigateToBookmark(bookmark);
+        finally
+        {
+            button.IsEnabled = true;
+        }
     }
 
     private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)

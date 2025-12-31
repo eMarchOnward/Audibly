@@ -42,7 +42,8 @@
             ThumbToolTipValueConverter="{StaticResource ProgressSliderValueConverter}"
             Value="{x:Bind PlayerViewModel.ChapterPositionMs, Mode=OneWay}"
             VerticalAlignment="Bottom"
-            x:Name="PositionSlider" />
+            x:Name="PositionSlider" 
+            IsTabStop="False"/>
 
         <TextBlock
             FontSize="20"
