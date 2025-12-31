@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -401,8 +402,15 @@ public sealed partial class PlayerControlGrid : UserControl
         }
         else if (key == VirtualKey.Space)
         {
+            // Suppress play/pause when typing in the Bookmarks flyout (e.g., the note TextBox)
+            if (IsInBookmarksFlyoutTextEditing())
+            {
+                // Let the TextBox receive the space character
+                e.Handled = false;
+                return;
+            }
 
-            // Toggle play/pause when Ctrl+Space is pressed
+            // Toggle play/pause
             var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
             if (wasPlaying)
                 PlayerViewModel.MediaPlayer.Pause();
@@ -411,5 +419,38 @@ public sealed partial class PlayerControlGrid : UserControl
 
             e.Handled = true;
         }
+    }
+
+    // Checks whether focus is currently inside the Bookmarks flyout and on a text-edit control
+    private bool IsInBookmarksFlyoutTextEditing()
+    {
+        var focused = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        if (focused == null) return false;
+
+        // If focus is on a TextBox (or within its visual tree) inside the Bookmarks flyout, return true
+        // Find the flyout root
+        var flyout = BookmarksButton?.Flyout as Flyout;
+        var root = flyout?.Content as FrameworkElement;
+        if (root == null) return false;
+
+        // Walk up the visual tree from the focused element to see if it's within the flyout content
+        var current = focused;
+        while (current != null)
+        {
+            if (current == root)
+                break;
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        // If not within the flyout, ignore
+        if (current != root) return false;
+
+        // If the focused element is a text input (TextBox or RichEditBox), suppress space handling
+        var isTextInput =
+            focused is TextBox ||
+            focused is RichEditBox;
+
+        return isTextInput;
     }
 }
