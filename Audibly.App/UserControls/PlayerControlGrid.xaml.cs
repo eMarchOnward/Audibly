@@ -224,6 +224,24 @@ public sealed partial class PlayerControlGrid : UserControl
         _bookmarks = await _bookmarkService.GetBookmarksAsync(PlayerViewModel.NowPlaying.Id);
         var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
         if (list != null) list.ItemsSource = _bookmarks;
+
+        // Wire Enter key on the note TextBox so Enter behaves like clicking Add
+        var flyout = BookmarksButton?.Flyout as Flyout;
+        var root = flyout?.Content as FrameworkElement;
+        var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+        if (noteBox != null)
+        {
+            // Ensure we don't double-subscribe
+            noteBox.KeyDown -= BookmarksNoteTextBox_KeyDown;
+            noteBox.KeyDown += BookmarksNoteTextBox_KeyDown;
+        }
+
+        // Attach a closed handler so we can detach the KeyDown handler when the flyout closes
+        if (flyout != null)
+        {
+            flyout.Closed -= BookmarksFlyout_Closed;
+            flyout.Closed += BookmarksFlyout_Closed;
+        }
     }
 
     private async void AddBookmark_Click(object sender, RoutedEventArgs e)
@@ -240,9 +258,41 @@ public sealed partial class PlayerControlGrid : UserControl
             var saved = await _bookmarkService.AddBookmarkForCurrentPositionAsync(PlayerViewModel, noteText, _bookmarks);
             if (saved == null) return;
 
+            // Try to find the ListView inside the flyout that displays bookmarks
+            var list = GetFlyoutElement<ListView>(flyout, "BookmarksListView");
+
+            if (list != null)
+            {
+                // Let the UI thread process bindings/layout at least once
+                await Task.Yield();
+
+                // Poll for the saved bookmark to appear in the ListView items (timeout ~1000ms)
+                const int intervalMs = 1000;
+                const int maxAttempts = 20; // 20 * 50ms = 1000ms
+                var found = false;
+
+                for (var attempt = 0; attempt < maxAttempts; attempt++)
+                {
+                    // Check items for either reference equality or matching Id
+                    if (list.Items.Cast<object>().Any(item =>
+                        ReferenceEquals(item, saved) ||
+                        (item is Bookmark b && saved is Bookmark s && b.Id == s.Id)))
+                    {
+                        found = true;
+                        break;
+                    }
+
+                    await Task.Delay(intervalMs);
+                }
+
+                // Small extra delay when found to let visuals stabilize
+                if (found)
+                    await Task.Delay(50);
+            }
+
             if (noteBox != null) noteBox.Text = string.Empty;
 
-            // Close the Bookmarks flyout after adding
+            // Close the Bookmarks flyout after adding and after the item is observed (or timeout)
             flyout?.Hide();
         }
         catch (Exception ex)
@@ -458,5 +508,42 @@ public sealed partial class PlayerControlGrid : UserControl
             focused is RichEditBox;
 
         return isTextInput;
+    }
+
+    // KeyDown handler for the Bookmarks note TextBox - Enter adds the bookmark
+    private void BookmarksNoteTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            // Prevent newline and further propagation
+            e.Handled = true;
+
+            // Invoke add bookmark (same behavior as the Add button)
+            try
+            {
+                AddBookmark_Click(this, null);
+            }
+            catch (Exception ex)
+            {
+                App.ViewModel.LoggingService?.LogError(ex, true);
+            }
+        }
+    }
+
+    // Clean up subscriptions when the flyout closes
+    private void BookmarksFlyout_Closed(object sender, object e)
+    {
+        var flyout = sender as Flyout ?? BookmarksButton?.Flyout as Flyout;
+        var root = flyout?.Content as FrameworkElement;
+        var noteBox = root?.FindName("BookmarksNoteTextBox") as TextBox;
+        if (noteBox != null)
+        {
+            noteBox.KeyDown -= BookmarksNoteTextBox_KeyDown;
+        }
+
+        if (flyout != null)
+        {
+            flyout.Closed -= BookmarksFlyout_Closed;
+        }
     }
 }

@@ -769,8 +769,8 @@ public class MainViewModel : BindableBase
                 50,
                 new AudiobookTileSize
                 {
-                    TitleFontSize = 10.8,
-                    AuthorFontSize = 8.4,
+                    TitleFontSize = 12.6,
+                    AuthorFontSize = 9.8,
                     TitleMaxWidth = 100,
                     PlayButtonHeightWidth = 35,
                     ProgressIndicatorTextFontSize = 10,

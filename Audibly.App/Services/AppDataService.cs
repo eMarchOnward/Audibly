@@ -33,6 +33,18 @@ public class AppDataService : IAppDataService
 
     #region IAppDataService Members
 
+    // Plan (pseudocode):
+    // 1. Create or open the per-book appdata folder.
+    // 2. If imageBytes is null -> copy packaged default asset as before.
+    // 3. If imageBytes is provided:
+    //    a. Load the image from a MemoryStream using ImageSharp.
+    //    b. Compute square side = min(width, height).
+    //    c. Compute center crop rectangle: cropX = (width - side)/2, cropY = (height - side)/2.
+    //    d. Mutate the image by cropping with the computed rectangle.
+    //    e. Save the cropped image into a MemoryStream as PNG (to preserve transparency).
+    //    f. Write resulting bytes to the created `CoverImage.png` StorageFile.
+    // 4. Continue to create thumbnail using existing ShrinkAndSaveAsync.
+    // 5. Let the existing try/catch handle fallbacks if anything fails.
     public async Task<Tuple<string, string>> WriteCoverImageAsync(string path, byte[]? imageBytes)
     {
         try
@@ -50,9 +62,40 @@ public class AppDataService : IAppDataService
             }
             else
             {
+                // Create the destination file first
                 var coverImage = await bookAppdataDir.CreateFileAsync("CoverImage.png", CreationCollisionOption.ReplaceExisting);
-                await FileIO.WriteBytesAsync(coverImage, imageBytes);
-                coverImagePath = coverImage.Path;
+
+                // Load image from the provided bytes, center-crop to 1:1, then save to the storage file.
+                try
+                {
+                    using var inputStream = new MemoryStream(imageBytes);
+                    using var image = await Image.LoadAsync(inputStream);
+
+                    // Determine square side (center crop)
+                    var side = Math.Min(image.Width, image.Height);
+                    if (image.Width != image.Height)
+                    {
+                        var cropX = (image.Width - side) / 2;
+                        var cropY = (image.Height - side) / 2;
+                        var cropRect = new SixLabors.ImageSharp.Rectangle(cropX, cropY, side, side);
+                        image.Mutate(ctx => ctx.Crop(cropRect));
+                    }
+
+                    // Save cropped image to a MemoryStream as PNG (preserves transparency if present)
+                    await using var outStream = new MemoryStream();
+                    await image.SaveAsPngAsync(outStream);
+                    var outBytes = outStream.ToArray();
+
+                    // Write bytes to StorageFile
+                    await FileIO.WriteBytesAsync(coverImage, outBytes);
+                    coverImagePath = coverImage.Path;
+                }
+                catch
+                {
+                    // If in-memory processing fails for any reason, fall back to writing the original bytes
+                    await FileIO.WriteBytesAsync(coverImage, imageBytes);
+                    coverImagePath = coverImage.Path;
+                }
             }
 
             // Create 400x400 thumbnail next to the cover
@@ -218,11 +261,30 @@ public class AppDataService : IAppDataService
 
             await using var fs = File.OpenRead(path);
             using var image = await Image.LoadAsync(fs);
-            if (ResizeNeeded(image.Height, image.Width, maxHeight, maxWidth, out var newHeight, out var newWidth))
+
+            // Determine the square crop side (center crop to 1:1 aspect ratio)
+            var side = Math.Min(image.Width, image.Height);
+            if (image.Width != image.Height)
             {
-                image.Mutate(x => x.Resize(new ResizeOptions
+                var cropX = (image.Width - side) / 2;
+                var cropY = (image.Height - side) / 2;
+                var cropRect = new SixLabors.ImageSharp.Rectangle(cropX, cropY, side, side);
+
+                image.Mutate(ctx => ctx.Crop(cropRect));
+            }
+
+            // After crop, decide if resize is needed to fit within maxWidth/maxHeight
+            // Because we enforce 1:1, only one side is relevant.
+            var finalSide = side;
+            var maxSide = Math.Min(maxWidth, maxHeight);
+
+            if (finalSide > maxSide)
+            {
+                // Resize down to the constrained square size
+                image.Mutate(ctx => ctx.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
                 {
-                    Size = new Size(newWidth, newHeight)
+                    Size = new SixLabors.ImageSharp.Size(maxSide, maxSide),
+                    Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
                 }));
             }
 

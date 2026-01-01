@@ -319,67 +319,67 @@ public sealed partial class AudiobookTile : UserControl
         return null;
     }
 
-    private async void BookmarksFlyout_Opened(object sender, object e)
-    {
-        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-        if (audiobook == null) return;
-        _bookmarks = await _bookmarkService.GetBookmarksAsync(audiobook.Id);
-        var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
-        if (list != null) list.ItemsSource = _bookmarks;
-    }
+    //private async void BookmarksFlyout_Opened(object sender, object e)
+    //{
+    //    var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+    //    if (audiobook == null) return;
+    //    _bookmarks = await _bookmarkService.GetBookmarksAsync(audiobook.Id);
+    //    var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
+    //    if (list != null) list.ItemsSource = _bookmarks;
+    //}
 
-    private async void BookmarkItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button) return;
-        if (button.Tag is not Audibly.Models.Bookmark bookmark) return;
+    //private async void BookmarkItem_Click(object sender, RoutedEventArgs e)
+    //{
+    //    if (sender is not Button button) return;
+    //    if (button.Tag is not Audibly.Models.Bookmark bookmark) return;
 
-        try
-        {
-            button.IsEnabled = false; // prevent re-entrancy
+    //    try
+    //    {
+    //        button.IsEnabled = false; // prevent re-entrancy
 
-            var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-            if (audiobook == null) return;
+    //        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+    //        if (audiobook == null) return;
 
-            // Exceptions from EnqueueAsync will be caught below
-            await _dispatcherQueue.EnqueueAsync(async () =>
-            {
-                await PlayerViewModel.OpenAudiobook(audiobook);
-            });
+    //        // Exceptions from EnqueueAsync will be caught below
+    //        await _dispatcherQueue.EnqueueAsync(async () =>
+    //        {
+    //            await PlayerViewModel.OpenAudiobook(audiobook);
+    //        });
 
-            _bookmarkService.NavigateToBookmark(bookmark);
-        }
-        catch (Exception ex)
-        {
-            App.ViewModel.LoggingService?.LogError(ex, true);
-        }
-        finally
-        {
-            button.IsEnabled = true;
-        }
-    }
+    //        _bookmarkService.NavigateToBookmark(bookmark);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        App.ViewModel.LoggingService?.LogError(ex, true);
+    //    }
+    //    finally
+    //    {
+    //        button.IsEnabled = true;
+    //    }
+    //}
 
-    private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
-        {
-            try
-            {
-                button.IsEnabled = false; // prevent double-click re-entrancy
-                await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
-            }
-            catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
-            {
-                // Row was already deleted; update UI and swallow
-                _bookmarks.Remove(bookmark);
-            }
-            catch (Exception ex)
-            {
-                App.ViewModel.LoggingService?.LogError(ex, true);
-            }
-            finally
-            {
-                button.IsEnabled = true;
-            }
-        }
-    }
+    //private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
+    //{
+    //    if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
+    //    {
+    //        try
+    //        {
+    //            button.IsEnabled = false; // prevent double-click re-entrancy
+    //            await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
+    //        }
+    //        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+    //        {
+    //            // Row was already deleted; update UI and swallow
+    //            _bookmarks.Remove(bookmark);
+    //        }
+    //        catch (Exception ex)
+    //        {
+    //            App.ViewModel.LoggingService?.LogError(ex, true);
+    //        }
+    //        finally
+    //        {
+    //            button.IsEnabled = true;
+    //        }
+    //    }
+    //}
 }
