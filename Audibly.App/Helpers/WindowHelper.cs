@@ -58,7 +58,7 @@ public static class WindowHelper
         }
 
         miniPlayerWindow = CreateWindow("MiniPlayerWindow");
-        miniPlayerWindow.CustomizeWindow(660, !MicaController.IsSupported() ? 92 : 96, true, true, false, false, false);
+        miniPlayerWindow.CustomizeWindow(680, !MicaController.IsSupported() ? 92 : 96, true, true, false, false, false);
 
         var rootPage = new NewMiniPlayerPage();
         miniPlayerWindow.Content = rootPage;

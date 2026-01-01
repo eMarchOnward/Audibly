@@ -267,7 +267,7 @@ public sealed partial class PlayerControlGrid : UserControl
                 await Task.Yield();
 
                 // Poll for the saved bookmark to appear in the ListView items (timeout ~1000ms)
-                const int intervalMs = 1000;
+                const int intervalMs = 50;
                 const int maxAttempts = 20; // 20 * 50ms = 1000ms
                 var found = false;
 
@@ -287,7 +287,7 @@ public sealed partial class PlayerControlGrid : UserControl
 
                 // Small extra delay when found to let visuals stabilize
                 if (found)
-                    await Task.Delay(50);
+                    await Task.Delay(1000);
             }
 
             if (noteBox != null) noteBox.Text = string.Empty;
