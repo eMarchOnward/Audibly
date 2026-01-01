@@ -397,6 +397,9 @@ public sealed partial class NewMiniPlayerPage : Page
             if (saved == null) return;
 
             if (noteBox != null) noteBox.Text = string.Empty;
+
+            // Close the Bookmarks flyout after adding
+            flyout?.Hide();
         }
         catch (Exception ex)
         {
@@ -455,6 +458,9 @@ public sealed partial class NewMiniPlayerPage : Page
         // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
         if (wasPlaying)
             PlayerViewModel.MediaPlayer.Play();
+
+        // Close the Bookmarks flyout after navigating
+        (BookmarksButton?.Flyout as Flyout)?.Hide();
     }
 
 }
