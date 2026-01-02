@@ -59,6 +59,7 @@
             IsSettingsVisible="True"
             IsTitleBarAutoPaddingEnabled="True"
             ItemInvoked="NavigationView_ItemInvoked"
+            OpenPaneLength="220"
             Visibility="{x:Bind ViewModel.IsNavigationViewVisible, Mode=OneWay}">
 
             <muxc:NavigationView.MenuItems>

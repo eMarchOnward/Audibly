@@ -10,13 +10,13 @@
     <Identity
             Name="Audibly.eHead.dev"
             Publisher="CN=eHead"
-            Version="3.0.4.0"/>
+            Version="3.0.5.0"/>
 
     <mp:PhoneIdentity PhoneProductId="a4e10036-a97d-4e2e-8144-0a20e6bcb775"
                       PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
     <Properties>
-        <DisplayName>Audibly devHead</DisplayName>
+        <DisplayName>Audibly eHead.dev</DisplayName>
         <PublisherDisplayName>eHead</PublisherDisplayName>
         <Logo>Assets\StoreLogo.png</Logo>
     </Properties>
