@@ -5,6 +5,7 @@ using Audibly.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Threading.Tasks;
 using Windows.Media.Playback;
 
 namespace Audibly.App.UserControls;
@@ -162,8 +163,10 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
-    private async void SkipBackButton_OnClick(object sender, RoutedEventArgs e)
+    public static async Task SkipBackAsync()
     {
+        var PlayerViewModel = App.PlayerViewModel;
+
         // If we don't have NowPlaying or a CurrentChapter, fall back to previous behavior.
         if (PlayerViewModel.NowPlaying == null || PlayerViewModel.NowPlaying.CurrentChapter == null)
         {
@@ -286,14 +289,29 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
+    public static async Task SkipForwardAsync()
+    {
+        var PlayerViewModel = App.PlayerViewModel;
+        var skipForwardAmount = _skipForwardButtonAmount;
+
+        var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
+        var newPos = PlayerViewModel.CurrentPosition + skipForwardAmount <= naturalDuration
+            ? PlayerViewModel.CurrentPosition + skipForwardAmount
+            : naturalDuration;
+
+        PlayerViewModel.CurrentPosition = newPos;
+
+        if (PlayerViewModel.NowPlaying != null)
+            await PlayerViewModel.NowPlaying.SaveAsync();
+    }
+
+    private async void SkipBackButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        await SkipBackAsync();
+    }
+
     private async void SkipForwardButton_OnClick(object sender, RoutedEventArgs e)
     {
-        // todo: might need to switch this to using the duration from the audiobook record
-        PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition + _skipForwardButtonAmount <=
-                                          PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration
-            ? PlayerViewModel.CurrentPosition + _skipForwardButtonAmount
-            : PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
-
-        await PlayerViewModel.NowPlaying.SaveAsync();
+        await SkipForwardAsync();
     }
 }

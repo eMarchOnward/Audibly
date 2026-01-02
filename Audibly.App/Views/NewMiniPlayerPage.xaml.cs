@@ -1,5 +1,6 @@
 // Author: rstewa · https://github.com/rstewa
 // Updated: 12/26/2025
+// Updated: 01/01/2026 - add global hotkey hook while mini-player pinned
 
 using System;
 using System.Linq;
@@ -24,6 +25,7 @@ using CommunityToolkit.WinUI;
 
 using AppConstants = Audibly.App.Helpers.Constants;
 using Microsoft.UI.Xaml.Media;
+using System.Diagnostics; // for Trace
 
 namespace Audibly.App.Views;
 
@@ -34,6 +36,7 @@ public sealed partial class NewMiniPlayerPage : Page
 {
     private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue;
     private CancellationTokenSource? _playbackSpeedFlyoutCts;
+    private GlobalKeyboardHook? _globalKeyboardHook; // <-- added
 
     // todo: fix the bug where this is getting triggered even when the user hasn't clicked the slider
     private bool _isUserDragging = false;
@@ -316,6 +319,89 @@ public sealed partial class NewMiniPlayerPage : Page
 
         window.SetWindowDraggable(false);
         window.SetWindowAlwaysOnTop(true);
+
+        // Register global hotkeys (Ctrl+Up, Ctrl+Down, Ctrl+Left, Ctrl+Right, Ctrl+Space)
+        try
+        {
+            // Avoid double-installing
+            _globalKeyboardHook?.Dispose();
+            _globalKeyboardHook = new GlobalKeyboardHook
+            {
+                OnCtrlUp = () =>
+                {
+                    _dispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { HandleSpeedIncrease(); ClosePlaybackSpeedFlyout();  }
+                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
+                    });
+                },
+                OnCtrlDown = () =>
+                {
+                    _dispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { HandleSpeedDecrease(); ClosePlaybackSpeedFlyout();  }
+                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
+                    });
+                },
+                OnCtrlLeft = () =>
+                {
+                    _dispatcherQueue.TryEnqueue(async () =>
+                    {
+                        try
+                        {
+                            // Prefer using the control's public SkipForwardAsync if available.
+                            if (PlaySkipButtonsStack.SkipBackAsync != null)
+                            {
+                                await PlaySkipButtonsStack.SkipBackAsync();
+                            }
+                            else
+                            {
+                                //await PerformSkipForwardAsync();
+                            }
+                        }
+                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
+                    });
+                },
+                OnCtrlRight = () =>
+                {
+                    _dispatcherQueue.TryEnqueue(async () =>
+                    {
+                        try
+                        {
+                            // Prefer using the control's public SkipForwardAsync if available.
+                            if (PlaySkipButtonsStack.SkipForwardAsync != null)
+                            {
+                                await PlaySkipButtonsStack.SkipForwardAsync();
+                            }
+                            else
+                            {
+                                //await PerformSkipForwardAsync();
+                            }
+                        }
+                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
+                    });
+                },
+                OnCtrlSpace = () =>
+                {
+                    _dispatcherQueue.TryEnqueue(() =>
+                    {
+                        try
+                        {
+                            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+                            if (wasPlaying)
+                                PlayerViewModel.MediaPlayer.Pause();
+                            else
+                                PlayerViewModel.MediaPlayer.Play();
+                        }
+                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
+                    });
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
     }
 
     private void UnpinButton_Click(object sender, RoutedEventArgs e)
@@ -328,6 +414,79 @@ public sealed partial class NewMiniPlayerPage : Page
 
         window.SetWindowDraggable(true);
         window.SetWindowAlwaysOnTop(false);
+
+        // Unregister global hotkeys
+        try
+        {
+            _globalKeyboardHook?.Dispose();
+            _globalKeyboardHook = null;
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    // Helper: skip back ~10s (mirrors PlaySkipButtonsStack behavior)
+    private async Task PerformSkipBackAsync()
+    {
+        try
+        {
+            var skipAmount = TimeSpan.FromSeconds(10);
+
+            if (PlayerViewModel.NowPlaying == null || PlayerViewModel.NowPlaying.CurrentChapter == null)
+            {
+                PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition - skipAmount > TimeSpan.Zero
+                    ? PlayerViewModel.CurrentPosition - skipAmount
+                    : TimeSpan.Zero;
+
+                if (PlayerViewModel.NowPlaying != null)
+                    await PlayerViewModel.NowPlaying.SaveAsync();
+
+                return;
+            }
+
+            var currentPos = PlayerViewModel.CurrentPosition;
+            var candidate = currentPos - skipAmount;
+            var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+
+            // If candidate would go before chapter start, clamp to chapter start
+            if (candidate < chapterStart)
+                PlayerViewModel.CurrentPosition = chapterStart;
+            else
+                PlayerViewModel.CurrentPosition = candidate;
+
+            await PlayerViewModel.NowPlaying.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    // Helper: skip forward ~30s (mirrors PlaySkipButtonsStack behavior)
+    private async Task PerformSkipForwardAsync()
+    {
+        try
+        {
+            var skipAmount = TimeSpan.FromSeconds(30);
+
+            var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
+            var maxDuration = naturalDuration; // naturalDuration is already a TimeSpan
+
+            var newPos = PlayerViewModel.CurrentPosition + skipAmount <= maxDuration
+                ? PlayerViewModel.CurrentPosition + skipAmount
+                : maxDuration;
+
+            PlayerViewModel.CurrentPosition = newPos;
+
+            if (PlayerViewModel.NowPlaying != null)
+                await PlayerViewModel.NowPlaying.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
     }
 
     private void BackToLibraryButton_Click(object sender, RoutedEventArgs e)
