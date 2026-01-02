@@ -319,67 +319,131 @@ public sealed partial class AudiobookTile : UserControl
         return null;
     }
 
-    //private async void BookmarksFlyout_Opened(object sender, object e)
-    //{
-    //    var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-    //    if (audiobook == null) return;
-    //    _bookmarks = await _bookmarkService.GetBookmarksAsync(audiobook.Id);
-    //    var list = GetFlyoutElement<ListView>(sender, "BookmarksListView");
-    //    if (list != null) list.ItemsSource = _bookmarks;
-    //}
+    private static string SanitizeForSqlite(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        // Trim, remove non-printable control characters except CR/LF/TAB, and escape single quotes
+        var trimmed = value.Trim();
+        var sanitizedChars = trimmed.Where(c => c == '\n' || c == '\r' || c == '\t' || !char.IsControl(c));
+        var sanitized = new string(sanitizedChars.ToArray());
+        // Normalize newlines to \n
+        sanitized = sanitized.Replace("\r\n", "\n").Replace("\r", "\n");
+        // Escape single quotes for SQLite text safety (although EF parameterizes, this is defensive)
+        sanitized = sanitized.Replace("'", "''");
+        return sanitized;
+    }
 
-    //private async void BookmarkItem_Click(object sender, RoutedEventArgs e)
-    //{
-    //    if (sender is not Button button) return;
-    //    if (button.Tag is not Audibly.Models.Bookmark bookmark) return;
+    private async void EditInfo_OnClick(object sender, RoutedEventArgs e)
+    {
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
+        ViewModel.SelectedAudiobook = audiobook;
 
-    //    try
-    //    {
-    //        button.IsEnabled = false; // prevent re-entrancy
+        // Build dialog content inline
+        var thumbnail = new Image
+        {
+            Width = 96,
+            Height = 96,
+            Stretch = Stretch.UniformToFill
+        };
+        thumbnail.SetBinding(Image.SourceProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Path = new PropertyPath("SelectedAudiobook.ThumbnailPath")
+        });
 
-    //        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-    //        if (audiobook == null) return;
+        var titleBox = new TextBox { Header = "Title" };
+        titleBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Path = new PropertyPath("SelectedAudiobook.Model.Title"),
+            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
+        });
 
-    //        // Exceptions from EnqueueAsync will be caught below
-    //        await _dispatcherQueue.EnqueueAsync(async () =>
-    //        {
-    //            await PlayerViewModel.OpenAudiobook(audiobook);
-    //        });
+        var authorBox = new TextBox { Header = "Author" };
+        authorBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Path = new PropertyPath("SelectedAudiobook.Model.Author"),
+            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
+        });
 
-    //        _bookmarkService.NavigateToBookmark(bookmark);
-    //    }
-    //    catch (Exception ex)
-    //    {
-    //        App.ViewModel.LoggingService?.LogError(ex, true);
-    //    }
-    //    finally
-    //    {
-    //        button.IsEnabled = true;
-    //    }
-    //}
+        var narratorBox = new TextBox { Header = "Narrator" };
+        narratorBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Path = new PropertyPath("SelectedAudiobook.Model.Composer"),
+            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
+        });
 
-    //private async void DeleteBookmark_Click(object sender, RoutedEventArgs e)
-    //{
-    //    if (sender is Button button && button.Tag is Audibly.Models.Bookmark bookmark)
-    //    {
-    //        try
-    //        {
-    //            button.IsEnabled = false; // prevent double-click re-entrancy
-    //            await _bookmarkService.DeleteBookmarkAsync(bookmark, _bookmarks);
-    //        }
-    //        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
-    //        {
-    //            // Row was already deleted; update UI and swallow
-    //            _bookmarks.Remove(bookmark);
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            App.ViewModel.LoggingService?.LogError(ex, true);
-    //        }
-    //        finally
-    //        {
-    //            button.IsEnabled = true;
-    //        }
-    //    }
-    //}
+        var descBox = new TextBox { Header = "Description", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
+        descBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
+        {
+            Path = new PropertyPath("SelectedAudiobook.Model.Description"),
+            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
+            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
+        });
+
+        var fieldsPanel = new StackPanel { Spacing = 8 };
+        fieldsPanel.Children.Add(titleBox);
+        fieldsPanel.Children.Add(authorBox);
+        fieldsPanel.Children.Add(narratorBox);
+
+        var grid = new Grid { ColumnSpacing = 12 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(thumbnail, 0);
+        grid.Children.Add(thumbnail);
+        Grid.SetColumn(fieldsPanel, 1);
+        grid.Children.Add(fieldsPanel);
+
+        var panel = new StackPanel { Spacing = 12, Padding = new Thickness(12) };
+        panel.Children.Add(grid);
+        panel.Children.Add(descBox);
+        panel.DataContext = ViewModel;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Edit Info",
+            Content = panel,
+            PrimaryButtonText = "OK",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            MinWidth = 420
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            // Read values directly from textboxes and sanitize
+            var newTitle = SanitizeForSqlite(titleBox.Text);
+            var newAuthor = SanitizeForSqlite(authorBox.Text);
+            var newNarrator = SanitizeForSqlite(narratorBox.Text);
+            var newDescription = SanitizeForSqlite(descBox.Text);
+
+            // Apply to model
+            audiobook.Model.Title = newTitle;
+            audiobook.Model.Author = newAuthor;
+            audiobook.Model.Composer = newNarrator;
+            audiobook.Model.Description = newDescription;
+
+            // Persist
+            await audiobook.SaveAsync();
+            audiobook.RefreshCoverImage();
+
+            // Refresh Library view so updated metadata appears
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                await ViewModel.GetAudiobookListAsync();
+            });
+
+            // If the edited audiobook is currently playing, update NowPlaying metadata
+            var now = PlayerViewModel.NowPlaying;
+            if (now != null && now.Id == audiobook.Id)
+            {
+                now.Model.Title = audiobook.Model.Title;
+                now.Model.Author = audiobook.Model.Author;
+            }
+        }
+    }
 }

@@ -44,6 +44,12 @@
                     <FontIcon Glyph="&#xE946;" />
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
+            <!-- New Edit Info item -->
+            <MenuFlyoutItem Click="EditInfo_OnClick" Text="Edit Info">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE70F;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
             <MenuFlyoutItem
                 Click="MarkAsCompleted_OnClick"
                 Text="Mark as Completed"
