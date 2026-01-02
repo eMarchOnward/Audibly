@@ -148,12 +148,21 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
+
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
-            await PlayerViewModel.OpenAudiobook(audiobook);
-
-            // todo: this really breaks shit
-            // PlayerViewModel.MediaPlayer.Play();
+            var currentAudiobook = PlayerViewModel.NowPlaying;
+            
+            // If no audiobook is loaded, or a different audiobook is loaded, open this one
+            if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+            {
+                await PlayerViewModel.OpenAudiobook(audiobook);
+            }
+            else
+            {
+                // Same audiobook is already loaded, start playing
+                PlayerViewModel.MediaPlayer.Play();
+            }
         });
     }
 
@@ -396,7 +405,12 @@ public sealed partial class AudiobookTile : UserControl
         Grid.SetColumn(fieldsPanel, 1);
         grid.Children.Add(fieldsPanel);
 
-        var panel = new StackPanel { Spacing = 12, Padding = new Thickness(12) };
+        var panel = new StackPanel 
+        { 
+            Spacing = 12, 
+            Padding = new Thickness(12),
+            MinWidth = 400  // Add MinWidth here to ensure content is at least 400px wide
+        };
         panel.Children.Add(grid);
         panel.Children.Add(descBox);
         panel.DataContext = ViewModel;
@@ -415,18 +429,19 @@ public sealed partial class AudiobookTile : UserControl
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            // Read values directly from textboxes and sanitize
-            var newTitle = SanitizeForSqlite(titleBox.Text);
-            var newAuthor = SanitizeForSqlite(authorBox.Text);
-            var newNarrator = SanitizeForSqlite(narratorBox.Text);
-            var newDescription = SanitizeForSqlite(descBox.Text);
+            // Sanitize the values already in the model (bindings already updated them)
+            var newTitle = SanitizeForSqlite(audiobook.Model.Title);
+            var newAuthor = SanitizeForSqlite(audiobook.Model.Author);
+            var newNarrator = SanitizeForSqlite(audiobook.Model.Composer);
+            var newDescription = SanitizeForSqlite(audiobook.Model.Description);
 
-            // Apply to model
+            // Apply sanitized values back to model
             audiobook.Model.Title = newTitle;
             audiobook.Model.Author = newAuthor;
             audiobook.Model.Composer = newNarrator;
             audiobook.Model.Description = newDescription;
-
+            // Mark the audiobook as modified so SaveAsync will actually save
+            audiobook.IsModified = true;
             // Persist
             await audiobook.SaveAsync();
             audiobook.RefreshCoverImage();
