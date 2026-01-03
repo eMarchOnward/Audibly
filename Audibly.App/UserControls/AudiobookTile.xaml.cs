@@ -222,6 +222,9 @@ public sealed partial class AudiobookTile : UserControl
                 audiobook.Model.CoverImagePath = coverImagePath;
                 audiobook.Model.ThumbnailPath = thumbnailPath;
                 
+                // Mark the audiobook as modified so SaveAsync will actually save
+                audiobook.IsModified = true;
+                
                 // Save the updated audiobook to database first
                 await audiobook.SaveAsync();
                 
