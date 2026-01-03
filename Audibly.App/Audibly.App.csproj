@@ -24,6 +24,14 @@
         <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
         <AppxBundlePlatforms>x64</AppxBundlePlatforms>
         <PackageCertificateKeyFile>Audibly.App_TemporaryKey.pfx</PackageCertificateKeyFile>
+
+        <!-- Single-project MSIX expects this -->
+        <UseDefaultAppxManifest>true</UseDefaultAppxManifest>
+        <AppxManifest>Package.appxmanifest</AppxManifest>
+
+        <!-- convenience properties -->
+        <ManifestDebugFile>Package.Debug.appxmanifest</ManifestDebugFile>
+        <ManifestReleaseFile>Package.Release.appxmanifest</ManifestReleaseFile>
     </PropertyGroup>
 
     <!-- We recommend only using these features for release builds. -->
@@ -265,4 +273,26 @@
     <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
         <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
     </PropertyGroup>
+    <PropertyGroup>
+    <!-- keep these -->
+    <UseDefaultAppxManifest>true</UseDefaultAppxManifest>
+    <AppxManifest>Package.appxmanifest</AppxManifest>
+
+    <!-- optional: centralize names -->
+    <ManifestDebugFile>Package.Debug.appxmanifest</ManifestDebugFile>
+    <ManifestReleaseFile>Package.Release.appxmanifest</ManifestReleaseFile>
+  </PropertyGroup>
+
+  <Target Name="SelectAppxManifest" BeforeTargets="GenerateAppxPackageRecipe">
+  <PropertyGroup>
+    <SelectedManifest Condition="'$(Configuration)'=='Debug'">$(ManifestDebugFile)</SelectedManifest>
+    <SelectedManifest Condition="'$(Configuration)'!='Debug'">$(ManifestReleaseFile)</SelectedManifest>
+  </PropertyGroup>
+
+  <Message Text="Using Appx manifest: $(SelectedManifest)" Importance="High" />
+
+  <Copy SourceFiles="$(SelectedManifest)"
+        DestinationFiles="Package.appxmanifest"
+        OverwriteReadOnlyFiles="true" />
+</Target>
 </Project>
