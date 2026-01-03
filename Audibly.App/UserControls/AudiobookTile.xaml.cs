@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using Audibly.App.Extensions;
 using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.Models;
@@ -204,8 +205,9 @@ public sealed partial class AudiobookTile : UserControl
                 reader.ReadBytes(imageBytesArray);
             }
             
-            // Generate the folder path for this audiobook's data
-            var folderName = $"{audiobook.Title}_{audiobook.Id}".Replace(" ", "_");
+            // Generate the folder hash using the same method as FileImportService
+            // This ensures we're updating the correct folder location
+            var hash = $"{audiobook.Model.Title}{audiobook.Model.Author}{audiobook.Model.Composer}".GetSha256Hash();
             
             // Delete old cover images first
             if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
@@ -213,8 +215,9 @@ public sealed partial class AudiobookTile : UserControl
                 await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
             }
             
-            // Create new cover image and thumbnail using the same process as import
-            var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(folderName, imageBytesArray);
+            // Create new cover image and thumbnail using WriteCoverImageAsync
+            // This handles 1:1 cropping automatically
+            var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytesArray);
             
             if (!string.IsNullOrEmpty(coverImagePath))
             {
@@ -225,13 +228,26 @@ public sealed partial class AudiobookTile : UserControl
                 // Mark the audiobook as modified so SaveAsync will actually save
                 audiobook.IsModified = true;
                 
-                // Save the updated audiobook to database first
+                // Save the updated audiobook to database
                 await audiobook.SaveAsync();
                 
-                // Force refresh of cover image properties in the UI with a small delay
-                // This ensures the new image files are fully written before UI tries to load them
-                await Task.Delay(100);
+                // Force refresh of cover image properties in the UI
                 audiobook.RefreshCoverImage();
+                
+                // Refresh Library view so updated cover appears
+                await _dispatcherQueue.EnqueueAsync(async () =>
+                {
+                    await ViewModel.GetAudiobookListAsync();
+                });
+                
+                // If the edited audiobook is currently playing, update NowPlaying cover
+                var now = PlayerViewModel.NowPlaying;
+                if (now != null && now.Id == audiobook.Id)
+                {
+                    now.Model.CoverImagePath = audiobook.Model.CoverImagePath;
+                    now.Model.ThumbnailPath = audiobook.Model.ThumbnailPath;
+                    now.RefreshCoverImage();
+                }
                 
                 // Show success notification
                 ViewModel.EnqueueNotification(new Notification

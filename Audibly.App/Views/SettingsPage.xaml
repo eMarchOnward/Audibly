@@ -133,6 +133,39 @@
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
+                <!--  Hotkeys  -->
+                <toolkit:SettingsExpander Description="Keyboard shortcuts for controlling playback" Header="Hotkeys">
+                    <toolkit:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE765;" />
+                    </toolkit:SettingsExpander.HeaderIcon>
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard Header="Play/Pause">
+                            <TextBlock 
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Ctrl+Space (mini player pinned) or Space (when player has focus)" 
+                                VerticalAlignment="Center" />
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard Header="Skip forward/backward">
+                            <TextBlock 
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Ctrl+Left/Right arrows (mini player pinned) or Left/Right arrows (when player has focus)" 
+                                VerticalAlignment="Center" />
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard Header="Speed increase/decrease">
+                            <TextBlock 
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Ctrl+Up/Down arrows (mini player pinned), [ and ] or Up/Down arrows (when player has focus)" 
+                                VerticalAlignment="Center" />
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard Header="Global hotkeys">
+                            <TextBlock 
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="When the mini player is pinned global hotkeys are available. Just hold ctrl modifier." 
+                                VerticalAlignment="Center" />
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
                 <!--  Donate  -->
                 <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="Donate" />
 
