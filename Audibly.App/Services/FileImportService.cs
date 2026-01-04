@@ -293,7 +293,8 @@ public class FileImportService : IImportFiles
                         StartOffset = 0,
                         EndOffset = 0,
                         UseOffset = false,
-                        Title = (chapterIndex + 1).ToString(),
+                        Title = string.IsNullOrWhiteSpace(track.Title) ? 
+                            (chapterIndex + 1).ToString() : (chapterIndex + 1).ToString() + " " + track.Title,
                         Index = chapterIndex++,
                         ParentSourceFileIndex = sourceFile.Index
                     });
