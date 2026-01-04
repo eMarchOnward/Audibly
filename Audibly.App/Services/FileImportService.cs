@@ -293,7 +293,7 @@ public class FileImportService : IImportFiles
                         StartOffset = 0,
                         EndOffset = 0,
                         UseOffset = false,
-                        Title = track.Title,
+                        Title = (chapterIndex + 1).ToString(),
                         Index = chapterIndex++,
                         ParentSourceFileIndex = sourceFile.Index
                     });
@@ -303,20 +303,21 @@ public class FileImportService : IImportFiles
             audiobook.Duration = audiobook.SourcePaths.Sum(x => x.Duration);
 
             // save the cover image somewhere
-            var imageBytes = new Track(paths.First()).EmbeddedPictures.FirstOrDefault()?.PictureData;
+            var firstPath = paths.First();
+            var trackForImage = new Track(firstPath);
+            var imageBytes = trackForImage.EmbeddedPictures.FirstOrDefault()?.PictureData;
+
+            if (imageBytes == null)
+            {
+                imageBytes = TryGetFolderCoverBytes(Path.GetDirectoryName(firstPath));
+            }
 
             // generate hash from title, author, and composer
             var hash = $"{audiobook.Title}{audiobook.Author}{audiobook.Composer}".GetSha256Hash();
 
-            // todo: do i want to write the metadata to a json file here?
-            // write the metadata to a json file
-            // await App.ViewModel.AppDataService.WriteMetadataAsync(dir, track);
-
             (audiobook.CoverImagePath, audiobook.ThumbnailPath) =
                 await App.ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytes);
 
-            // combine the chapters from all the files
-            // audiobook.Chapters = audiobook.SourcePaths.SelectMany(x => x.Chapters).ToList();
             audiobook.CurrentChapterIndex = 0;
 
             return audiobook;
@@ -356,8 +357,6 @@ public class FileImportService : IImportFiles
                 FilePath = path,
                 Duration = track.Duration,
                 CurrentTimeMs = importedAudiobook?.CurrentTimeMs ?? 0
-                // CurrentChapterIndex = 0,
-                // Chapters = []
             };
 
             var audiobook = new Audiobook
@@ -388,22 +387,20 @@ public class FileImportService : IImportFiles
                 ]
             };
 
-            // TODO: check if the audiobook already exists in the database
-
             // save the cover image somewhere
             var imageBytes = track.EmbeddedPictures.FirstOrDefault()?.PictureData;
+
+            if (imageBytes == null)
+            {
+                var directory = Path.GetDirectoryName(path);
+                imageBytes = TryGetFolderCoverBytes(directory);
+            }
 
             // generate hash from title, author, and composer
             var hash = $"{audiobook.Title}{audiobook.Author}{audiobook.Composer}".GetSha256Hash();
 
-            // write the metadata to a json file
-            // todo: is this killing the import time?
-            // await App.ViewModel.AppDataService.WriteMetadataAsync(hash, track);
-
             (audiobook.CoverImagePath, audiobook.ThumbnailPath) =
                 await App.ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytes);
-
-            // var chapters = audiobook.SourcePaths.First().Chapters;
 
             // read in the chapters
             var chapterIndex = 0;
@@ -434,6 +431,59 @@ public class FileImportService : IImportFiles
         catch (Exception e)
         {
             // log the error
+            App.ViewModel.LoggingService.LogError(e, true);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Attempts to find a suitable cover image in the given directory.
+    ///     Preference order:
+    ///     1. Files named &quot;cover.*&quot; or &quot;folder.*&quot; (case-insensitive).
+    ///     2. Otherwise, the largest image file by size.
+    ///     Returns null if no image files are found or directory is invalid.
+    /// </summary>
+    private static byte[]? TryGetFolderCoverBytes(string? directory)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            {
+                return null;
+            }
+
+            var dirInfo = new DirectoryInfo(directory);
+
+            // Restrict to common image extensions
+            var imageFiles = dirInfo.GetFiles()
+                .Where(f =>
+                    f.Extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                    f.Extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+                    f.Extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+                    f.Extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase) ||
+                    f.Extension.Equals(".gif", StringComparison.OrdinalIgnoreCase) ||
+                    f.Extension.Equals(".webp", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (imageFiles.Count == 0)
+            {
+                return null;
+            }
+
+            // 1. Prefer &quot;cover.*&quot; or &quot;folder.*&quot; (base name only, case-insensitive)
+            var preferred = imageFiles.FirstOrDefault(f =>
+            {
+                var name = Path.GetFileNameWithoutExtension(f.Name);
+                return name.Equals("cover", StringComparison.OrdinalIgnoreCase) ||
+                       name.Equals("folder", StringComparison.OrdinalIgnoreCase);
+            });
+
+            var selected = preferred ?? imageFiles.OrderByDescending(f => f.Length).First();
+
+            return File.ReadAllBytes(selected.FullName);
+        }
+        catch (Exception e)
+        {
             App.ViewModel.LoggingService.LogError(e, true);
             return null;
         }

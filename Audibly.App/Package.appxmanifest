@@ -7,67 +7,67 @@
         xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
         IgnorableNamespaces="uap rescap">
 
-    <Identity
-            Name="Audibly.devHead"
+	<Identity
+            Name="Audibly.eHead"
             Publisher="CN=eHead"
-            Version="3.0.9.0"/>
+            Version="3.0.12.0"/>
 
-    <mp:PhoneIdentity PhoneProductId="a4e10036-a97d-4e2e-8144-0a20e6bcb775"
+	<mp:PhoneIdentity PhoneProductId="a4e10036-a97d-4e2e-8144-0a20e6bcb775"
                       PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
-    <Properties>
-        <DisplayName>Audibly devHead</DisplayName>
-        <PublisherDisplayName>eHead</PublisherDisplayName>
-        <Logo>Assets\StoreLogo.png</Logo>
-    </Properties>
+	<Properties>
+		<DisplayName>Audibly eHead</DisplayName>
+		<PublisherDisplayName>eHead</PublisherDisplayName>
+		<Logo>Assets\StoreLogo.png</Logo>
+	</Properties>
 
-    <Dependencies>
-        <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0"/>
-        <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0"/>
-    </Dependencies>
+	<Dependencies>
+		<TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0"/>
+		<TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0"/>
+	</Dependencies>
 
-    <Resources>
-        <Resource Language="x-generate"/>
-    </Resources>
+	<Resources>
+		<Resource Language="x-generate"/>
+	</Resources>
 
-    <Applications>
-        <Application Id="App"
+	<Applications>
+		<Application Id="App"
                      Executable="$targetnametoken$.exe"
                      EntryPoint="$targetentrypoint$">
-            <uap:VisualElements
-                    DisplayName="Audibly devHead"
+			<uap:VisualElements
+                    DisplayName="Audibly eHead"
                     Description="Audibly.App"
                     BackgroundColor="transparent"
                     Square150x150Logo="Assets\Square150x150Logo.png"
                     Square44x44Logo="Assets\Square44x44Logo.png">
-                <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\SmallTile.png"
+				<uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\SmallTile.png"
                                  Square310x310Logo="Assets\LargeTile.png" ShortName="Audibly"/>
-                <uap:SplashScreen Image="Assets\SplashScreen.png"/>
-            </uap:VisualElements>
-            <Extensions>
-                <uap:Extension Category="windows.fileTypeAssociation">
-                    <uap:FileTypeAssociation Name="m4b">
-                        <uap:SupportedFileTypes>
-                            <uap:FileType>.m4b</uap:FileType>
-                        </uap:SupportedFileTypes>
-                        <uap:DisplayName>Audiobook Player</uap:DisplayName>
-                        <uap:EditFlags OpenIsSafe="true"/>
-                    </uap:FileTypeAssociation>
-                </uap:Extension>
-                <uap:Extension Category="windows.fileTypeAssociation">
-                    <uap:FileTypeAssociation Name="mp3">
-                        <uap:SupportedFileTypes>
-                            <uap:FileType>.mp3</uap:FileType>
-                        </uap:SupportedFileTypes>
-                        <uap:DisplayName>Audiobook Player</uap:DisplayName>
-                        <uap:EditFlags OpenIsSafe="true"/>
-                    </uap:FileTypeAssociation>
-                </uap:Extension>
-            </Extensions>
-        </Application>
-    </Applications>
+				<uap:SplashScreen Image="Assets\SplashScreen.png"/>
+			</uap:VisualElements>
+			<Extensions>
+				<uap:Extension Category="windows.fileTypeAssociation">
+					<uap:FileTypeAssociation Name="m4b">
+						<uap:SupportedFileTypes>
+							<uap:FileType>.m4b</uap:FileType>
+						</uap:SupportedFileTypes>
+						<uap:DisplayName>Audiobook Player</uap:DisplayName>
+						<uap:EditFlags OpenIsSafe="true"/>
+					</uap:FileTypeAssociation>
+				</uap:Extension>
+				<uap:Extension Category="windows.fileTypeAssociation">
+					<uap:FileTypeAssociation Name="mp3">
+						<uap:SupportedFileTypes>
+							<uap:FileType>.mp3</uap:FileType>
+						</uap:SupportedFileTypes>
+						<uap:DisplayName>Audiobook Player</uap:DisplayName>
+						<uap:EditFlags OpenIsSafe="true"/>
+					</uap:FileTypeAssociation>
+				</uap:Extension>
+			</Extensions>
+		</Application>
+	</Applications>
 
-    <Capabilities>
-        <rescap:Capability Name="runFullTrust"/>
-    </Capabilities>
+	<Capabilities>
+		<rescap:Capability Name="runFullTrust"/>
+	</Capabilities>
 </Package>
