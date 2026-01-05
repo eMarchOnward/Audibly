@@ -330,7 +330,8 @@ public sealed partial class PlaySkipButtonsStack : UserControl
 
         // Find which source file this position falls into
         long cumulativeMs = 0;
-        var targetSourceFileIndex = PlayerViewModel.NowPlaying.CurrentSourceFileIndex;
+        var currentSourceFileIndex = PlayerViewModel.NowPlaying.CurrentSourceFileIndex;
+        var targetSourceFileIndex = currentSourceFileIndex;
         var positionWithinFileMs = 0L;
         
         for (var i = 0; i < PlayerViewModel.NowPlaying.SourcePaths.Count; i++)
@@ -347,20 +348,24 @@ public sealed partial class PlaySkipButtonsStack : UserControl
             cumulativeMs += fileDurationMs;
         }
 
-        // Update the absolute position
-        PlayerViewModel.NowPlaying.CurrentTimeMs = (int)newAbsolutePositionMs;
-
         // Check if we need to switch source files
-        if (targetSourceFileIndex != PlayerViewModel.NowPlaying.CurrentSourceFileIndex)
+        if (targetSourceFileIndex != currentSourceFileIndex)
         {
-            // Find the chapter at the target position
+            // Crossing file boundary - start at the beginning of the next file
+            // Calculate absolute position at the start of the target file
+            long absolutePositionAtFileStart = 0;
+            for (var i = 0; i < targetSourceFileIndex; i++)
+            {
+                absolutePositionAtFileStart += (long)(PlayerViewModel.NowPlaying.SourcePaths[i].Duration * 1000);
+            }
+            
+            PlayerViewModel.NowPlaying.CurrentTimeMs = (int)absolutePositionAtFileStart;
+            
+            // Find the first chapter in the target source file
             var targetChapter = PlayerViewModel.NowPlaying.Chapters
-                .FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceFileIndex &&
-                                     positionWithinFileMs >= c.StartTime &&
-                                     positionWithinFileMs < c.EndTime);
-
+                .FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceFileIndex);
+            
             var targetChapterIndex = targetChapter?.Index ?? 
-                PlayerViewModel.NowPlaying.Chapters.FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceFileIndex)?.Index ?? 
                 PlayerViewModel.NowPlaying.CurrentChapterIndex ?? 0;
 
             // Remember if we were playing
@@ -376,6 +381,7 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         else
         {
             // Same file, just update position
+            PlayerViewModel.NowPlaying.CurrentTimeMs = (int)newAbsolutePositionMs;
             PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(positionWithinFileMs);
         }
 
