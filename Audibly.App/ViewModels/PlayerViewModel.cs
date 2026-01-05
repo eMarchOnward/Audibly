@@ -581,6 +581,9 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         if (nextChapter == null) return;
 
+        // Set flag BEFORE modifying CurrentTimeMs to prevent race condition with PlaybackSession_PositionChanged
+        _isSwitchingSourceFiles = true;
+
         // Calculate the absolute position at the start of the next source file
         long absolutePositionMs = 0;
         for (var i = 0; i < nextSourceIndex; i++)
