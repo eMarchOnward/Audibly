@@ -685,13 +685,8 @@ public class PlayerViewModel : BindableBase, IDisposable
             
             currentNowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
-            // calculate/update progress
-            double tmp = 0;
-            if (currentNowPlaying.CurrentSourceFileIndex != 0)
-                for (var i = 0; i < currentNowPlaying.CurrentSourceFileIndex; i++)
-                    tmp += currentNowPlaying.SourcePaths[i].Duration;
-            tmp += CurrentPosition.TotalSeconds;
-            currentNowPlaying.Progress = Math.Ceiling(tmp / currentNowPlaying.Duration * 100);
+            // Calculate progress using the absolute CurrentTimeMs position
+            currentNowPlaying.Progress = Math.Ceiling((double)currentNowPlaying.CurrentTimeMs / (currentNowPlaying.Duration * 1000) * 100);
             currentNowPlaying.IsCompleted = currentNowPlaying.Progress >= 99.9;
 
             await currentNowPlaying.SaveAsync();
