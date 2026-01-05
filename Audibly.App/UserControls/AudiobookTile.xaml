@@ -84,6 +84,7 @@
         PointerEntered="AudiobookTile_OnPointerEntered"
         PointerExited="AudiobookTile_OnPointerExited"
         RightTapped="ButtonTile_OnRightTapped"
+        DoubleTapped="ButtonTile_DoubleTapped"
         x:Name="ButtonTile">
         <Grid RowSpacing="16" VerticalAlignment="Stretch">
 

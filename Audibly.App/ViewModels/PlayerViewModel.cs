@@ -14,6 +14,7 @@ using Audibly.App.Services;
 using CommunityToolkit.WinUI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
+using System.Diagnostics;
 
 namespace Audibly.App.ViewModels;
 
@@ -59,6 +60,10 @@ public class PlayerViewModel : BindableBase, IDisposable
     private double _volumeLevel;
 
     private string _volumeLevelGlyph = Constants.VolumeGlyph3;
+
+    private bool _mediaEventsInitialized;
+
+    private int _debugMediaEndedCount;
 
     public PlayerViewModel()
     {
@@ -228,6 +233,12 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private void InitializeAudioPlayer()
     {
+        if (_mediaEventsInitialized)
+        {
+            Debug.WriteLine("InitializeAudioPlayer called again; skipping event subscriptions.");
+            return;
+        }
+
         MediaPlayer.AutoPlay = false;
         MediaPlayer.AudioCategory = MediaPlayerAudioCategory.Media;
         MediaPlayer.AudioDeviceType = MediaPlayerAudioDeviceType.Multimedia;
@@ -238,6 +249,7 @@ public class PlayerViewModel : BindableBase, IDisposable
         MediaPlayer.PlaybackSession.PositionChanged += PlaybackSession_PositionChanged;
         MediaPlayer.PlaybackSession.PlaybackStateChanged += PlaybackSession_PlaybackStateChanged;
 
+        _mediaEventsInitialized = true;
         // set volume level from settings
         // UpdateVolume(UserSettings.Volume);
         // UpdatePlaybackSpeed(UserSettings.PlaybackSpeed);
@@ -414,7 +426,11 @@ public class PlayerViewModel : BindableBase, IDisposable
         try
         {
             if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
+            {
+                // Small delay so the player UI can initialize before the library view refreshes
+                await Task.Delay(400);
                 App.ViewModel.ApplySort();
+            }
         }
         catch (Exception ex)
         {
@@ -519,12 +535,22 @@ public class PlayerViewModel : BindableBase, IDisposable
 
             ChapterDurationMs = (int)(NowPlaying.CurrentChapter.EndTime - NowPlaying.CurrentChapter.StartTime);
 
+            // Calculate the position relative to the current source file
+            long cumulativeMs = 0;
+            for (var i = 0; i < NowPlaying.CurrentSourceFileIndex; i++)
+            {
+                cumulativeMs += (long)(NowPlaying.SourcePaths[i].Duration * 1000);
+            }
+            
+            var positionWithinSourceMs = NowPlaying.CurrentTimeMs - cumulativeMs;
+            if (positionWithinSourceMs < 0) positionWithinSourceMs = 0;
+
             ChapterPositionMs =
-                NowPlaying.CurrentTimeMs > NowPlaying.CurrentChapter.StartTime
-                    ? (int)(NowPlaying.CurrentTimeMs - NowPlaying.CurrentChapter.StartTime)
+                positionWithinSourceMs > NowPlaying.CurrentChapter.StartTime
+                    ? (int)(positionWithinSourceMs - NowPlaying.CurrentChapter.StartTime)
                     : 0;
 
-            CurrentPosition = TimeSpan.FromMilliseconds(NowPlaying.CurrentTimeMs);
+            CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
 
             if (_pendingAutoPlay)
             {
@@ -536,16 +562,32 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private void AudioPlayer_MediaEnded(MediaPlayer sender, object args)
     {
-        // check if there is a next source file
-        if (NowPlaying == null || NowPlaying.CurrentSourceFileIndex >= NowPlaying.SourcePaths.Count - 1) return;
+        if (NowPlaying == null) return;
 
-        // todo: log error here
-        if (NowPlaying.CurrentChapterIndex == null) return;
+        var currentSourceIndex = NowPlaying.CurrentSourceFileIndex;
+        if (currentSourceIndex >= NowPlaying.SourcePaths.Count - 1) return;
+
+        var nextSourceIndex = currentSourceIndex + 1;
+
+        var nextChapter = NowPlaying.Chapters
+            .FirstOrDefault(c => c.ParentSourceFileIndex == nextSourceIndex);
+
+        if (nextChapter == null) return;
+
+        // Calculate the absolute position at the start of the next source file
+        long absolutePositionMs = 0;
+        for (var i = 0; i < nextSourceIndex; i++)
+        {
+            absolutePositionMs += (long)(NowPlaying.SourcePaths[i].Duration * 1000);
+        }
+        
+        // Set the absolute position to the start of the next file
+        NowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
         _pendingAutoPlay = true;
-
-        OpenSourceFile(NowPlaying.CurrentSourceFileIndex + 1, (int)NowPlaying.CurrentChapterIndex + 1);
+        OpenSourceFile(nextSourceIndex, nextChapter.Index);
     }
+
 
     private void AudioPlayer_MediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
     {

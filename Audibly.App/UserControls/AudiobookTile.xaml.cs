@@ -153,7 +153,7 @@ public sealed partial class AudiobookTile : UserControl
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
             var currentAudiobook = PlayerViewModel.NowPlaying;
-            
+
             // If no audiobook is loaded, or a different audiobook is loaded, open this one
             if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
             {
@@ -192,9 +192,9 @@ public sealed partial class AudiobookTile : UserControl
         // Show file picker for supported image formats
         var supportedImageTypes = new List<string> { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp" };
         var selectedFile = ViewModel.FileDialogService.OpenFileDialog(supportedImageTypes, PickerLocationId.PicturesLibrary);
-        
+
         if (selectedFile == null) return; // User cancelled
-        
+
         try
         {
             // Read the selected image file
@@ -204,42 +204,42 @@ public sealed partial class AudiobookTile : UserControl
             {
                 reader.ReadBytes(imageBytesArray);
             }
-            
+
             // Generate the folder hash using the same method as FileImportService
             // This ensures we're updating the correct folder location
             var hash = $"{audiobook.Model.Title}{audiobook.Model.Author}{audiobook.Model.Composer}".GetSha256Hash();
-            
+
             // Delete old cover images first
             if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
             {
                 await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
             }
-            
+
             // Create new cover image and thumbnail using WriteCoverImageAsync
             // This handles 1:1 cropping automatically
             var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytesArray);
-            
+
             if (!string.IsNullOrEmpty(coverImagePath))
             {
                 // Update the audiobook model with new cover paths
                 audiobook.Model.CoverImagePath = coverImagePath;
                 audiobook.Model.ThumbnailPath = thumbnailPath;
-                
+
                 // Mark the audiobook as modified so SaveAsync will actually save
                 audiobook.IsModified = true;
-                
+
                 // Save the updated audiobook to database
                 await audiobook.SaveAsync();
-                
+
                 // Force refresh of cover image properties in the UI
                 audiobook.RefreshCoverImage();
-                
+
                 // Refresh Library view so updated cover appears
                 await _dispatcherQueue.EnqueueAsync(async () =>
                 {
                     await ViewModel.GetAudiobookListAsync();
                 });
-                
+
                 // If the edited audiobook is currently playing, update NowPlaying cover
                 var now = PlayerViewModel.NowPlaying;
                 if (now != null && now.Id == audiobook.Id)
@@ -248,7 +248,7 @@ public sealed partial class AudiobookTile : UserControl
                     now.Model.ThumbnailPath = audiobook.Model.ThumbnailPath;
                     now.RefreshCoverImage();
                 }
-                
+
                 // Show success notification
                 ViewModel.EnqueueNotification(new Notification
                 {
@@ -424,9 +424,9 @@ public sealed partial class AudiobookTile : UserControl
         Grid.SetColumn(fieldsPanel, 1);
         grid.Children.Add(fieldsPanel);
 
-        var panel = new StackPanel 
-        { 
-            Spacing = 12, 
+        var panel = new StackPanel
+        {
+            Spacing = 12,
             Padding = new Thickness(12),
             MinWidth = 400  // Add MinWidth here to ensure content is at least 400px wide
         };
@@ -478,6 +478,44 @@ public sealed partial class AudiobookTile : UserControl
                 now.Model.Title = audiobook.Model.Title;
                 now.Model.Author = audiobook.Model.Author;
             }
+        }
+    }
+
+    // new double-tap handler — open then play after a short delay
+    private async void ButtonTile_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        // Prevent the underlying Click events from also acting on this double-tap.
+        e.Handled = true;
+
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
+
+        try
+        {
+            // Open the audiobook (safely switches source / saves state)
+            await PlayerViewModel.OpenAudiobook(audiobook);
+
+            // Wait ~1 second, then start playback only if the same audiobook is still loaded
+            await Task.Delay(1000);
+
+            // Use dispatcher to ensure UI-thread operations are safe
+            await _dispatcherQueue.EnqueueAsync(() =>
+            {
+                if (PlayerViewModel.NowPlaying != null && PlayerViewModel.NowPlaying.Id == audiobook.Id)
+                {
+                    PlayerViewModel.MediaPlayer.Play();
+                }
+                return Task.CompletedTask;
+            });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.LoggingService.LogError(ex, true);
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "Failed to open/play audiobook.",
+                Severity = InfoBarSeverity.Error
+            });
         }
     }
 }
