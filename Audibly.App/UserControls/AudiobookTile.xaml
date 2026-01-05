@@ -75,6 +75,7 @@
             </MenuFlyoutItem>
         </MenuFlyout>
         <converters:MillisecondsToTimeStringConverter x:Key="MillisecondsToTimeStringConverter" />
+        <converters:SecondsToTimeStringConverter x:Key="SecondsToTimeStringConverter" />
     </UserControl.Resources>
     <Button
         Background="Transparent"
@@ -168,7 +169,7 @@
                     TextWrapping="NoWrap"
                     ToolTipService.ToolTip="{x:Bind Title, Mode=OneWay}"
                     x:Name="TitleText" />
-                            <TextBlock
+                    <TextBlock
                     FontSize="{x:Bind ViewModel.AuthorFontSize, Mode=OneWay}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     HorizontalAlignment="Stretch"
@@ -176,6 +177,36 @@
                     Text="{x:Bind Author, Mode=OneWay}"
                     TextTrimming="CharacterEllipsis"
                     TextWrapping="NoWrap" />
+                    
+                    <!-- Duration and Chapter Count -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBlock
+                            Grid.Column="0"
+                            FontSize="{x:Bind ViewModel.AuthorFontSize, Mode=OneWay}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            HorizontalAlignment="Left"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="NoWrap" />
+                        
+                        <TextBlock
+                            Grid.Column="1"
+                            FontSize="{x:Bind ViewModel.AuthorFontSize, Mode=OneWay}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="NoWrap">
+                            <Run Text="{x:Bind ChapterCount, Mode=OneWay}" />
+                            <Run Text=" chapters" />
+                        </TextBlock>
+                    </Grid>
                 </StackPanel>
             </Grid>
         </Grid>

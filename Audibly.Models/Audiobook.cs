@@ -22,8 +22,7 @@ public class Audiobook : DbObject, IEquatable<Audiobook>
 
     public string Description { get; set; }
     public long Duration { get; set; } // *
-
-    // public int CurrentTimeMs { get; set; } // *
+    public int CurrentTimeMs { get; set; } // *
     public string CoverImagePath { get; set; }
 
     public string ThumbnailPath { get; set; }

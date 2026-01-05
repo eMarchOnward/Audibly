@@ -64,6 +64,8 @@ public class PlayerViewModel : BindableBase, IDisposable
     private bool _mediaEventsInitialized;
 
     private int _debugMediaEndedCount;
+    
+    private bool _isSwitchingSourceFiles;
 
     public PlayerViewModel()
     {
@@ -496,6 +498,8 @@ public class PlayerViewModel : BindableBase, IDisposable
         if (NowPlaying == null || NowPlaying.CurrentSourceFileIndex == index)
             return;
 
+        _isSwitchingSourceFiles = true;
+
         // Do not reset CurrentTimeMs; it may be set by JumpToPosition
         NowPlaying.CurrentSourceFileIndex = index;
         NowPlaying.CurrentChapterIndex = chapterIndex;
@@ -535,7 +539,7 @@ public class PlayerViewModel : BindableBase, IDisposable
 
             ChapterDurationMs = (int)(NowPlaying.CurrentChapter.EndTime - NowPlaying.CurrentChapter.StartTime);
 
-            // Calculate the position relative to the current source file
+            // Calculate the position relative to the current source file from the absolute CurrentTimeMs
             long cumulativeMs = 0;
             for (var i = 0; i < NowPlaying.CurrentSourceFileIndex; i++)
             {
@@ -550,7 +554,10 @@ public class PlayerViewModel : BindableBase, IDisposable
                     ? (int)(positionWithinSourceMs - NowPlaying.CurrentChapter.StartTime)
                     : 0;
 
+            // Set the MediaPlayer position to the calculated position within the current source file
             CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
+
+            _isSwitchingSourceFiles = false;
 
             if (_pendingAutoPlay)
             {
@@ -630,6 +637,9 @@ public class PlayerViewModel : BindableBase, IDisposable
     {
         if (NowPlaying == null) return;
 
+        // Don't update position while switching source files to prevent race conditions
+        if (_isSwitchingSourceFiles) return;
+
         // Additional safety check: ensure we're not processing position updates for a stale audiobook
         // This can happen during audiobook switching when events are queued
         var currentNowPlaying = NowPlaying; // Capture current reference to avoid race conditions
@@ -661,10 +671,17 @@ public class PlayerViewModel : BindableBase, IDisposable
             ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > currentNowPlaying.CurrentChapter.StartTime
                 ? CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime
                 : 0);
-            // ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime);
-            currentNowPlaying.CurrentTimeMs = (int)CurrentPosition.TotalMilliseconds;
+            
+            // Calculate absolute position: sum of all previous files + current position in this file
+            long absolutePositionMs = 0;
+            for (var i = 0; i < currentNowPlaying.CurrentSourceFileIndex; i++)
+            {
+                absolutePositionMs += (long)(currentNowPlaying.SourcePaths[i].Duration * 1000);
+            }
+            absolutePositionMs += (long)CurrentPosition.TotalMilliseconds;
+            
+            currentNowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
-            // TODO: this is gross
             // calculate/update progress
             double tmp = 0;
             if (currentNowPlaying.CurrentSourceFileIndex != 0)

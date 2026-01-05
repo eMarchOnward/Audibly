@@ -530,7 +530,7 @@ public class MainViewModel : BindableBase
 
         var audiobooksExport = Audiobooks.Select(x => new
         {
-            x.CurrentSourceFile.CurrentTimeMs, x.CoverImagePath, x.CurrentSourceFile.FilePath, x.Progress,
+            x.CurrentTimeMs, x.CoverImagePath, x.CurrentSourceFile.FilePath, x.Progress,
             x.CurrentChapterIndex, x.IsNowPlaying, x.IsCompleted
         });
         var json = JsonSerializer.Serialize(audiobooksExport);

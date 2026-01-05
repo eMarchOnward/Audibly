@@ -41,6 +41,9 @@ namespace Audibly.Repository.Migrations
                     b.Property<int>("CurrentSourceFileIndex")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("CurrentTimeMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("DateLastPlayed")
                         .HasColumnType("TEXT");
 
@@ -171,9 +174,6 @@ namespace Audibly.Repository.Migrations
 
                     b.Property<Guid>("AudiobookId")
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("CurrentTimeMs")
-                        .HasColumnType("INTEGER");
 
                     b.Property<long>("Duration")
                         .HasColumnType("INTEGER");

@@ -269,8 +269,7 @@ public class FileImportService : IImportFiles
                 {
                     Index = sourceFileIndex++,
                     FilePath = path,
-                    Duration = track.Duration,
-                    CurrentTimeMs = 0
+                    Duration = track.Duration
                 };
 
                 audiobook.SourcePaths.Add(sourceFile);
@@ -356,8 +355,7 @@ public class FileImportService : IImportFiles
             {
                 Index = 0,
                 FilePath = path,
-                Duration = track.Duration,
-                CurrentTimeMs = importedAudiobook?.CurrentTimeMs ?? 0
+                Duration = track.Duration
             };
 
             var audiobook = new Audiobook

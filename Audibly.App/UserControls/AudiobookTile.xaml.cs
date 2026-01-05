@@ -116,6 +116,22 @@ public sealed partial class AudiobookTile : UserControl
     public static readonly DependencyProperty SourcePathsCountProperty =
         DependencyProperty.Register(nameof(SourcePathsCount), typeof(int), typeof(AudiobookTile), new PropertyMetadata(0));
 
+    public long Duration
+    {
+        get => (long)GetValue(DurationProperty);
+        set => SetValue(DurationProperty, value);
+    }
+    public static readonly DependencyProperty DurationProperty =
+        DependencyProperty.Register(nameof(Duration), typeof(long), typeof(AudiobookTile), new PropertyMetadata(0L));
+
+    public int ChapterCount
+    {
+        get => (int)GetValue(ChapterCountProperty);
+        set => SetValue(ChapterCountProperty, value);
+    }
+    public static readonly DependencyProperty ChapterCountProperty =
+        DependencyProperty.Register(nameof(ChapterCount), typeof(int), typeof(AudiobookTile), new PropertyMetadata(0));
+
     public object Source
     {
         get => GetValue(SourceProperty);

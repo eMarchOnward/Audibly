@@ -5,6 +5,7 @@ using Audibly.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
 
@@ -218,10 +219,19 @@ public sealed partial class PlaySkipButtonsStack : UserControl
                     var chapterEnd = TimeSpan.FromMilliseconds(previousChapter.EndTime);
                     var positionBeforeEnd = chapterEnd - TimeSpan.FromSeconds(10);
                     var chapterStartTime = TimeSpan.FromMilliseconds(previousChapter.StartTime);
-                    var targetPosition = positionBeforeEnd > chapterStartTime ? positionBeforeEnd : chapterStartTime;
+                    var targetPositionInFile = positionBeforeEnd > chapterStartTime ? positionBeforeEnd : chapterStartTime;
                     
-                    // Update the target position in the audiobook model before opening the file
-                    PlayerViewModel.NowPlaying.CurrentTimeMs = (int)targetPosition.TotalMilliseconds;
+                    // Calculate absolute position across all source files
+                    long absolutePositionMs = 0;
+                    var targetSourceFileIndex = PlayerViewModel.NowPlaying.CurrentSourceFileIndex - 1;
+                    for (var i = 0; i < targetSourceFileIndex; i++)
+                    {
+                        absolutePositionMs += (long)(PlayerViewModel.NowPlaying.SourcePaths[i].Duration * 1000);
+                    }
+                    absolutePositionMs += (long)targetPositionInFile.TotalMilliseconds;
+                    
+                    // Update the absolute position in the audiobook model before opening the file
+                    PlayerViewModel.NowPlaying.CurrentTimeMs = (int)absolutePositionMs;
                     
                     // Set pending auto play if we were playing before
                     if (wasPlaying)
@@ -292,17 +302,84 @@ public sealed partial class PlaySkipButtonsStack : UserControl
     public static async Task SkipForwardAsync()
     {
         var PlayerViewModel = App.PlayerViewModel;
-        var skipForwardAmount = _skipForwardButtonAmount;
 
-        var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
-        var newPos = PlayerViewModel.CurrentPosition + skipForwardAmount <= naturalDuration
-            ? PlayerViewModel.CurrentPosition + skipForwardAmount
-            : naturalDuration;
+        // If we don't have NowPlaying, fall back to simple behavior
+        if (PlayerViewModel.NowPlaying == null)
+        {
+            var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
+            var newPos = PlayerViewModel.CurrentPosition + _skipForwardButtonAmount <= naturalDuration
+                ? PlayerViewModel.CurrentPosition + _skipForwardButtonAmount
+                : naturalDuration;
 
-        PlayerViewModel.CurrentPosition = newPos;
+            PlayerViewModel.CurrentPosition = newPos;
+            return;
+        }
 
-        if (PlayerViewModel.NowPlaying != null)
-            await PlayerViewModel.NowPlaying.SaveAsync();
+        // Calculate the new absolute position
+        var currentAbsolutePositionMs = PlayerViewModel.NowPlaying.CurrentTimeMs;
+        var newAbsolutePositionMs = currentAbsolutePositionMs + (long)_skipForwardButtonAmount.TotalMilliseconds;
+        
+        // Calculate total audiobook duration in milliseconds
+        var totalDurationMs = (long)(PlayerViewModel.NowPlaying.Duration * 1000);
+        
+        // Clamp to total duration
+        if (newAbsolutePositionMs > totalDurationMs)
+        {
+            newAbsolutePositionMs = totalDurationMs;
+        }
+
+        // Find which source file this position falls into
+        long cumulativeMs = 0;
+        var targetSourceFileIndex = PlayerViewModel.NowPlaying.CurrentSourceFileIndex;
+        var positionWithinFileMs = 0L;
+        
+        for (var i = 0; i < PlayerViewModel.NowPlaying.SourcePaths.Count; i++)
+        {
+            var fileDurationMs = (long)(PlayerViewModel.NowPlaying.SourcePaths[i].Duration * 1000);
+            
+            if (newAbsolutePositionMs < cumulativeMs + fileDurationMs)
+            {
+                targetSourceFileIndex = i;
+                positionWithinFileMs = newAbsolutePositionMs - cumulativeMs;
+                break;
+            }
+            
+            cumulativeMs += fileDurationMs;
+        }
+
+        // Update the absolute position
+        PlayerViewModel.NowPlaying.CurrentTimeMs = (int)newAbsolutePositionMs;
+
+        // Check if we need to switch source files
+        if (targetSourceFileIndex != PlayerViewModel.NowPlaying.CurrentSourceFileIndex)
+        {
+            // Find the chapter at the target position
+            var targetChapter = PlayerViewModel.NowPlaying.Chapters
+                .FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceFileIndex &&
+                                     positionWithinFileMs >= c.StartTime &&
+                                     positionWithinFileMs < c.EndTime);
+
+            var targetChapterIndex = targetChapter?.Index ?? 
+                PlayerViewModel.NowPlaying.Chapters.FirstOrDefault(c => c.ParentSourceFileIndex == targetSourceFileIndex)?.Index ?? 
+                PlayerViewModel.NowPlaying.CurrentChapterIndex ?? 0;
+
+            // Remember if we were playing
+            bool wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+            
+            if (wasPlaying)
+            {
+                PlayerViewModel.SetPendingAutoPlay(true);
+            }
+
+            PlayerViewModel.OpenSourceFile(targetSourceFileIndex, targetChapterIndex);
+        }
+        else
+        {
+            // Same file, just update position
+            PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(positionWithinFileMs);
+        }
+
+        await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
     private async void SkipBackButton_OnClick(object sender, RoutedEventArgs e)

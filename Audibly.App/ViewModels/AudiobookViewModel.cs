@@ -136,22 +136,18 @@ public class AudiobookViewModel : BindableBase
     // private int _currentTimeMs;
 
     /// <summary>
-    ///     Gets or sets the current time in milliseconds of the audiobook.
+    ///     Gets or sets the current time in milliseconds of the audiobook (absolute position across all files).
     /// </summary>
     public int CurrentTimeMs
     {
-        // get => _currentTimeMs;
-        // set => Set(ref _currentTimeMs, value);
-        get => CurrentSourceFile.CurrentTimeMs;
+        get => Model.CurrentTimeMs;
         set
         {
-            if (value != CurrentSourceFile.CurrentTimeMs)
+            if (value != Model.CurrentTimeMs)
             {
-                CurrentSourceFile.CurrentTimeMs = value;
+                Model.CurrentTimeMs = value;
                 IsModified = true;
                 OnPropertyChanged();
-
-                // Task.Run(SaveAsync); // todo: should this be done here?
             }
         }
     }

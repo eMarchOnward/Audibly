@@ -19,6 +19,9 @@ namespace Audibly.Repository.Migrations
                     Author = table.Column<string>(type: "TEXT", nullable: false),
                     Composer = table.Column<string>(type: "TEXT", nullable: false),
                     CurrentSourceFileIndex = table.Column<int>(type: "INTEGER", nullable: false),
+                    CurrentChapterIndex = table.Column<int>(type: "INTEGER", nullable: true),
+                    CurrentTimeMs = table.Column<int>(type: "INTEGER", nullable: false),
+                    Progress = table.Column<double>(type: "REAL", nullable: false),
                     DateLastPlayed = table.Column<DateTime>(type: "TEXT", nullable: true),
                     DateImported = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Description = table.Column<string>(type: "TEXT", nullable: false),
@@ -27,11 +30,10 @@ namespace Audibly.Repository.Migrations
                     ThumbnailPath = table.Column<string>(type: "TEXT", nullable: false),
                     IsNowPlaying = table.Column<bool>(type: "INTEGER", nullable: false),
                     PlaybackSpeed = table.Column<double>(type: "REAL", nullable: false),
-                    Progress = table.Column<double>(type: "REAL", nullable: false),
                     ReleaseDate = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Title = table.Column<string>(type: "TEXT", nullable: false),
                     Volume = table.Column<double>(type: "REAL", nullable: false),
-                    CurrentChapterIndex = table.Column<int>(type: "INTEGER", nullable: true),
+
                     IsCompleted = table.Column<bool>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -74,7 +76,6 @@ namespace Audibly.Repository.Migrations
                     Id = table.Column<Guid>(type: "TEXT", nullable: false),
                     Index = table.Column<int>(type: "INTEGER", nullable: false),
                     FilePath = table.Column<string>(type: "TEXT", nullable: false),
-                    CurrentTimeMs = table.Column<int>(type: "INTEGER", nullable: false),
                     Duration = table.Column<long>(type: "INTEGER", nullable: false),
                     AudiobookId = table.Column<Guid>(type: "TEXT", nullable: false)
                 },

@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,6 +93,17 @@ public sealed partial class PlayerControlGrid : UserControl
 
         if (newChapter == null) return;
 
+        // Calculate the absolute position for the start of the new chapter
+        long absolutePositionMs = 0;
+        for (var i = 0; i < newChapter.ParentSourceFileIndex; i++)
+        {
+            absolutePositionMs += (long)(PlayerViewModel.NowPlaying.SourcePaths[i].Duration * 1000);
+        }
+        absolutePositionMs += (long)newChapter.StartTime;
+        
+        // Always update CurrentTimeMs to the absolute position
+        PlayerViewModel.NowPlaying.CurrentTimeMs = (int)absolutePositionMs;
+
         // check if the newly selected chapter is in a different source file than the current chapter
         if (PlayerViewModel.NowPlaying != null &&
             PlayerViewModel.NowPlaying.CurrentSourceFile.Index != newChapter.ParentSourceFileIndex)
@@ -101,19 +113,20 @@ public sealed partial class PlayerControlGrid : UserControl
 
             // set the current source file index to the new source file index
             PlayerViewModel.OpenSourceFile(newChapter.ParentSourceFileIndex, newChapter.Index);
-            PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(newChapter.StartTime);
 
             // If playback was ongoing before navigation, resume it.
             // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
             if (wasPlaying)
                 PlayerViewModel.MediaPlayer.Play();
+            
+            // SaveAsync is called inside OpenSourceFile, no need to call it again here
         }
         else if (ChapterCombo.SelectedIndex != ChapterCombo.Items.IndexOf(PlayerViewModel.NowPlaying?.CurrentChapter))
         {
+            // Same source file - just update the position
             PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(newChapter.StartTime);
+            await PlayerViewModel.NowPlaying.SaveAsync();
         }
-
-        await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
     private void OpenMiniPlayerButton_OnClick(object sender, RoutedEventArgs e)

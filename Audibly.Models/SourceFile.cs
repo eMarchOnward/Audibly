@@ -8,7 +8,6 @@ public class SourceFile : DbObject, IEquatable<SourceFile>
 {
     public int Index { get; set; }
     public string FilePath { get; set; }
-    public int CurrentTimeMs { get; set; }
     public long Duration { get; set; }
     public Guid AudiobookId { get; set; }
     public Audiobook Audiobook { get; set; }
