@@ -191,9 +191,13 @@
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Left"
                             Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="{x:Bind Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}"
                             TextTrimming="CharacterEllipsis"
-                            TextWrapping="NoWrap" />
+                            TextWrapping="NoWrap">
+                            <Run Text="{x:Bind Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}" />
+                            <Run Text=" | " />
+                            <Run Text="{x:Bind Progress, Mode=OneWay}" />
+                            <Run Text="%" />
+                        </TextBlock>
                         
                         <TextBlock
                             Grid.Column="1"

@@ -147,7 +147,9 @@ public class AudiobookViewModel : BindableBase
             {
                 Model.CurrentTimeMs = value;
                 IsModified = true;
-                OnPropertyChanged();
+                // Don't raise OnPropertyChanged here - CurrentTimeMs updates happen many times per second
+                // during playback and would cause excessive UI updates. The tile display will update
+                // when the audiobook is next loaded/displayed.
             }
         }
     }
@@ -198,7 +200,9 @@ public class AudiobookViewModel : BindableBase
 
             Model.Progress = value;
             IsModified = true;
-            OnPropertyChanged();
+            // Don't raise OnPropertyChanged here - Progress updates happen many times per second
+            // during playback and would cause excessive UI updates. The tile display will update
+            // when the audiobook is stopped/saved.
         }
     }
 

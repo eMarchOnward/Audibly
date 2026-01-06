@@ -474,33 +474,36 @@ public class PlayerViewModel : BindableBase, IDisposable
                                  positionWithinSourceMs >= c.StartTime &&
                                  positionWithinSourceMs < c.EndTime);
 
-        // 4) Update current time and navigate
-        // Set absolute CurrentTimeMs to the bookmark position
-        NowPlaying.CurrentTimeMs = (int)positionMs;
-
         if (NowPlaying.CurrentSourceFileIndex != targetSourceIndex)
         {
             // Switch source file and set chapter index accordingly
             var targetChapterIndex = chapter?.Index ?? NowPlaying.CurrentChapterIndex ?? 0;
-            OpenSourceFile(targetSourceIndex, targetChapterIndex);
-            // Let MediaOpened handler seek using NowPlaying.CurrentTimeMs (already absolute)
-            CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
+            // Pass the absolute position to OpenSourceFile to prevent race conditions
+            OpenSourceFile(targetSourceIndex, targetChapterIndex, (int)positionMs);
         }
         else
         {
-            // Same source file: set direct playback position
+            // Same source file: set direct playback position and update CurrentTimeMs
+            NowPlaying.CurrentTimeMs = (int)positionMs;
             CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
         }
     }
 
-    public async void OpenSourceFile(int index, int chapterIndex)
+    public async void OpenSourceFile(int index, int chapterIndex, int? targetPositionMs = null)
     {
         if (NowPlaying == null || NowPlaying.CurrentSourceFileIndex == index)
             return;
 
+        Debug.WriteLine($"[OpenSourceFile] Opening file {index}, chapter {chapterIndex}, targetPosition: {targetPositionMs}");
+
         _isSwitchingSourceFiles = true;
 
-        // Do not reset CurrentTimeMs; it may be set by JumpToPosition
+        // If a target position was specified, set it now before any queued events can modify it
+        if (targetPositionMs.HasValue)
+        {
+            NowPlaying.CurrentTimeMs = targetPositionMs.Value;
+        }
+
         NowPlaying.CurrentSourceFileIndex = index;
         NowPlaying.CurrentChapterIndex = chapterIndex;
 
@@ -511,6 +514,7 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         await NowPlaying.SaveAsync();
 
+        Debug.WriteLine($"[OpenSourceFile] Loading media source: {NowPlaying.CurrentSourceFile.FilePath}");
         MediaPlayer.Source = MediaSource.CreateFromUri(NowPlaying.CurrentSourceFile.FilePath.AsUri());
     }
 
@@ -523,6 +527,8 @@ public class PlayerViewModel : BindableBase, IDisposable
         if (NowPlaying == null) return;
         _dispatcherQueue.EnqueueAsync(async () =>
         {
+            Debug.WriteLine($"[MediaOpened] File opened: Index={NowPlaying.CurrentSourceFileIndex}, Path={NowPlaying.CurrentSourceFile.FilePath}");
+            
             if (NowPlaying.Chapters.Count == 0)
             {
                 NowPlaying = null;
@@ -554,13 +560,17 @@ public class PlayerViewModel : BindableBase, IDisposable
                     ? (int)(positionWithinSourceMs - NowPlaying.CurrentChapter.StartTime)
                     : 0;
 
+            Debug.WriteLine($"[MediaOpened] AbsoluteCurrentTimeMs={NowPlaying.CurrentTimeMs}ms, CumulativeMs={cumulativeMs}ms, PositionWithinSource={positionWithinSourceMs}ms");
+
             // Set the MediaPlayer position to the calculated position within the current source file
             CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
 
+            Debug.WriteLine($"[MediaOpened] Clearing _isSwitchingSourceFiles flag");
             _isSwitchingSourceFiles = false;
 
             if (_pendingAutoPlay)
             {
+                Debug.WriteLine($"[MediaOpened] Auto-playing");
                 _pendingAutoPlay = false;
                 MediaPlayer.Play();
             }
@@ -571,7 +581,16 @@ public class PlayerViewModel : BindableBase, IDisposable
     {
         if (NowPlaying == null) return;
 
+        // Prevent processing MediaEnded multiple times during file switching
+        if (_isSwitchingSourceFiles)
+        {
+            Debug.WriteLine($"[MediaEnded] BLOCKED - Already switching files");
+            return;
+        }
+
         var currentSourceIndex = NowPlaying.CurrentSourceFileIndex;
+        Debug.WriteLine($"[MediaEnded] CurrentSourceIndex: {currentSourceIndex}, TotalFiles: {NowPlaying.SourcePaths.Count}");
+        
         if (currentSourceIndex >= NowPlaying.SourcePaths.Count - 1) return;
 
         var nextSourceIndex = currentSourceIndex + 1;
@@ -579,7 +598,13 @@ public class PlayerViewModel : BindableBase, IDisposable
         var nextChapter = NowPlaying.Chapters
             .FirstOrDefault(c => c.ParentSourceFileIndex == nextSourceIndex);
 
-        if (nextChapter == null) return;
+        if (nextChapter == null)
+        {
+            Debug.WriteLine($"[MediaEnded] No chapter found for file index {nextSourceIndex}");
+            return;
+        }
+
+        Debug.WriteLine($"[MediaEnded] Transitioning from file {currentSourceIndex} to {nextSourceIndex}, chapter: {nextChapter.Title}");
 
         // Set flag BEFORE modifying CurrentTimeMs to prevent race condition with PlaybackSession_PositionChanged
         _isSwitchingSourceFiles = true;
@@ -591,11 +616,11 @@ public class PlayerViewModel : BindableBase, IDisposable
             absolutePositionMs += (long)(NowPlaying.SourcePaths[i].Duration * 1000);
         }
         
-        // Set the absolute position to the start of the next file
-        NowPlaying.CurrentTimeMs = (int)absolutePositionMs;
-
+        Debug.WriteLine($"[MediaEnded] Setting CurrentTimeMs to {absolutePositionMs}ms (start of file {nextSourceIndex})");
+        
         _pendingAutoPlay = true;
-        OpenSourceFile(nextSourceIndex, nextChapter.Index);
+        // Pass the target position to OpenSourceFile so it can set it AFTER the flag is set
+        OpenSourceFile(nextSourceIndex, nextChapter.Index, (int)absolutePositionMs);
     }
 
 
@@ -670,6 +695,9 @@ public class PlayerViewModel : BindableBase, IDisposable
         {
             // Double-check that NowPlaying hasn't changed since we started processing this event
             if (NowPlaying != currentNowPlaying) return;
+
+            // Check again right before updating CurrentTimeMs in case we're switching files
+            if (_isSwitchingSourceFiles) return;
 
             ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > currentNowPlaying.CurrentChapter.StartTime
                 ? CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime
