@@ -195,8 +195,7 @@
                             TextWrapping="NoWrap">
                             <Run Text="{x:Bind Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}" />
                             <Run Text=" | " />
-                            <Run Text="{x:Bind Progress, Mode=OneWay}" />
-                            <Run Text="%" />
+                            <Run Text="{x:Bind Progress, Mode=OneWay}" /><Run Text="%" />
                         </TextBlock>
                         
                         <TextBlock

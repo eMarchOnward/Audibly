@@ -574,6 +574,10 @@ public class PlayerViewModel : BindableBase, IDisposable
                 _pendingAutoPlay = false;
                 MediaPlayer.Play();
             }
+
+            // Restore playback speed - MediaPlayer resets to 1.0 when a new source is loaded
+            MediaPlayer.PlaybackRate = PlaybackSpeed;
+            Debug.WriteLine($"[MediaOpened] Restored playback speed to {PlaybackSpeed}x");
         });
     }
 
