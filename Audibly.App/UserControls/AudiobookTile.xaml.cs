@@ -175,11 +175,6 @@ public sealed partial class AudiobookTile : UserControl
             {
                 await PlayerViewModel.OpenAudiobook(audiobook);
             }
-            else
-            {
-                // Same audiobook is already loaded, start playing
-                PlayerViewModel.MediaPlayer.Play();
-            }
         });
     }
 

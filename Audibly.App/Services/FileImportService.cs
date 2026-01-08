@@ -274,16 +274,20 @@ public class FileImportService : IImportFiles
 
                 audiobook.SourcePaths.Add(sourceFile);
 
-                // read in the chapters
-                foreach (var ch in track.Chapters)
+                // Don't process chapters for mp3 files (ATL seems to be picking up junk)
+                if (!path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
                 {
-                    var tmp = _mapper.Map<ChapterInfo>(ch);
-                    tmp.Index = chapterIndex++;
-                    tmp.ParentSourceFileIndex = sourceFile.Index;
-                    audiobook.Chapters.Add(tmp);
+                    // read in the chapters
+                    foreach (var ch in track.Chapters)
+                    {
+                        var tmp = _mapper.Map<ChapterInfo>(ch);
+                        tmp.Index = chapterIndex++;
+                        tmp.ParentSourceFileIndex = sourceFile.Index;
+                        audiobook.Chapters.Add(tmp);
+                    }
                 }
 
-                if (track.Chapters.Count == 0)
+                if (track.Chapters.Count == 0 || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
                     // create a single chapter for the entire book
                     audiobook.Chapters.Add(new ChapterInfo
                     {
