@@ -67,6 +67,15 @@ public class PlayerViewModel : BindableBase, IDisposable
     
     private bool _isSwitchingSourceFiles;
 
+    // Throttling fields for position updates
+    private DateTime _lastPositionUiUpdate = DateTime.MinValue;
+    private readonly TimeSpan _positionUpdateInterval = TimeSpan.FromMilliseconds(500);
+
+    // Dirty flag fields for persistence
+    private bool _positionDirty;
+    private DateTime _lastPositionPersistTime = DateTime.MinValue;
+    private readonly TimeSpan _positionPersistInterval = TimeSpan.FromSeconds(10);
+
     public PlayerViewModel()
     {
         InitializeAudioPlayer();
@@ -368,28 +377,39 @@ public class PlayerViewModel : BindableBase, IDisposable
         if (NowPlaying != null && NowPlaying.Equals(audiobook))
             return;
 
-        // Store the current audiobook to ensure we properly save its state
         var previousAudiobook = NowPlaying;
 
-        // Pause playback first to stop position updates
         MediaPlayer.Pause();
 
-        // If we have a previous audiobook, ensure it's properly saved before switching
         if (previousAudiobook != null)
         {
             previousAudiobook.IsNowPlaying = false;
-            // Wait for any pending saves to complete
-            await previousAudiobook.SaveAsync();
+
+            // Save previous audiobook in the background so we do not block UI when switching
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await previousAudiobook.SaveAsync();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Error saving previous audiobook: {ex}");
+                }
+            });
         }
 
         App.ViewModel.SelectedAudiobook = audiobook;
 
-        // verify that the file exists
-        // if there are multiple source files, check them all
-
-        if (audiobook.SourcePaths.Any(sourceFile => !File.Exists(sourceFile.FilePath)))
+        // Move file existence checks off the UI thread for large multi-file audiobooks
+        var missingFile = await Task.Run(() =>
         {
-            // note: content dialog
+            return audiobook.SourcePaths
+                .FirstOrDefault(sourceFile => !File.Exists(sourceFile.FilePath));
+        });
+
+        if (missingFile != null)
+        {
             await DialogService.ShowErrorDialogAsync("Error",
                 $"Unable to play audiobook: {audiobook.Title}. One or more of its source files were deleted or moved.");
 
@@ -398,19 +418,15 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
-            // Now it's safe to switch to the new audiobook
             NowPlaying = audiobook;
 
             if (NowPlaying.DateLastPlayed == null)
             {
-                // use the global playback speed and volume level if they are set
-                // and this is the first time the audiobook is being played
                 UpdatePlaybackSpeed(UserSettings.PlaybackSpeed);
                 UpdateVolume(UserSettings.Volume);
             }
             else
             {
-                // use the audiobook's playback speed and volume level
                 UpdatePlaybackSpeed(NowPlaying.PlaybackSpeed);
                 UpdateVolume(NowPlaying.Volume);
             }
@@ -421,6 +437,10 @@ public class PlayerViewModel : BindableBase, IDisposable
             ChapterComboSelectedIndex = NowPlaying.CurrentChapterIndex ?? 0;
             NowPlaying.CurrentChapterTitle = NowPlaying.Chapters[ChapterComboSelectedIndex].Title;
 
+            // Reset persistence tracking for the new audiobook
+            _positionDirty = false;
+            _lastPositionPersistTime = DateTime.UtcNow;
+
             await NowPlaying.SaveAsync();
         });
 
@@ -430,7 +450,7 @@ public class PlayerViewModel : BindableBase, IDisposable
             if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
             {
                 // Small delay so the player UI can initialize before the library view refreshes
-                await Task.Delay(400);
+                //await Task.Delay(400);
                 App.ViewModel.ApplySort();
             }
         }
@@ -476,16 +496,17 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         if (NowPlaying.CurrentSourceFileIndex != targetSourceIndex)
         {
-            // Switch source file and set chapter index accordingly
             var targetChapterIndex = chapter?.Index ?? NowPlaying.CurrentChapterIndex ?? 0;
-            // Pass the absolute position to OpenSourceFile to prevent race conditions
             OpenSourceFile(targetSourceIndex, targetChapterIndex, (int)positionMs);
         }
         else
         {
-            // Same source file: set direct playback position and update CurrentTimeMs
             NowPlaying.CurrentTimeMs = (int)positionMs;
             CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
+
+            // Mark dirty and persist immediately on explicit seek
+            MarkPositionDirty();
+            _ = TryPersistPositionAsync(NowPlaying);
         }
     }
 
@@ -498,7 +519,6 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         _isSwitchingSourceFiles = true;
 
-        // If a target position was specified, set it now before any queued events can modify it
         if (targetPositionMs.HasValue)
         {
             NowPlaying.CurrentTimeMs = targetPositionMs.Value;
@@ -512,14 +532,14 @@ public class PlayerViewModel : BindableBase, IDisposable
             NowPlaying.CurrentChapterTitle = NowPlaying.Chapters[chapterIndex].Title;
         });
 
-        await NowPlaying.SaveAsync();
+        // Mark dirty and persist immediately on explicit chapter/file jump
+        MarkPositionDirty();
+        await TryPersistPositionAsync(NowPlaying);
 
         Debug.WriteLine($"[OpenSourceFile] Loading media source: {NowPlaying.CurrentSourceFile.FilePath}");
         MediaPlayer.Source = MediaSource.CreateFromUri(NowPlaying.CurrentSourceFile.FilePath.AsUri());
     }
-
-    # endregion
-
+    #endregion
     #region event handlers
 
     private void AudioPlayer_MediaOpened(MediaPlayer sender, object args)
@@ -627,7 +647,6 @@ public class PlayerViewModel : BindableBase, IDisposable
         OpenSourceFile(nextSourceIndex, nextChapter.Index, (int)absolutePositionMs);
     }
 
-
     private void AudioPlayer_MediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
     {
         _dispatcherQueue.TryEnqueue(() => NowPlaying = null);
@@ -655,10 +674,18 @@ public class PlayerViewModel : BindableBase, IDisposable
                 break;
 
             case MediaPlaybackState.Paused:
-                _dispatcherQueue.TryEnqueue(() =>
+                _dispatcherQueue.TryEnqueue(async () =>
                 {
-                    if (PlayPauseIcon == Symbol.Play) return;
-                    PlayPauseIcon = Symbol.Play;
+                    if (PlayPauseIcon != Symbol.Play)
+                    {
+                        PlayPauseIcon = Symbol.Play;
+                    }
+
+                    // On pause, flush any pending position changes
+                    if (NowPlaying != null)
+                    {
+                        await TryPersistPositionAsync(NowPlaying);
+                    }
                 });
 
                 break;
@@ -669,12 +696,17 @@ public class PlayerViewModel : BindableBase, IDisposable
     {
         if (NowPlaying == null) return;
 
-        // Don't update position while switching source files to prevent race conditions
         if (_isSwitchingSourceFiles) return;
 
-        // Additional safety check: ensure we're not processing position updates for a stale audiobook
-        // This can happen during audiobook switching when events are queued
-        var currentNowPlaying = NowPlaying; // Capture current reference to avoid race conditions
+        var currentNowPlaying = NowPlaying;
+
+        var now = DateTime.UtcNow;
+        if (now - _lastPositionUiUpdate < _positionUpdateInterval)
+        {
+            return;
+        }
+
+        _lastPositionUiUpdate = now;
 
         if (!currentNowPlaying.CurrentChapter.InRange(CurrentPosition.TotalMilliseconds))
         {
@@ -685,7 +717,6 @@ public class PlayerViewModel : BindableBase, IDisposable
             if (newChapter != null)
                 _ = _dispatcherQueue.EnqueueAsync(() =>
                 {
-                    // Double-check that NowPlaying hasn't changed since we started processing this event
                     if (NowPlaying == currentNowPlaying)
                     {
                         currentNowPlaying.CurrentChapterIndex = ChapterComboSelectedIndex = newChapter.Index;
@@ -697,33 +728,62 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         _ = _dispatcherQueue.EnqueueAsync(async () =>
         {
-            // Double-check that NowPlaying hasn't changed since we started processing this event
             if (NowPlaying != currentNowPlaying) return;
 
-            // Check again right before updating CurrentTimeMs in case we're switching files
             if (_isSwitchingSourceFiles) return;
 
             ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > currentNowPlaying.CurrentChapter.StartTime
                 ? CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime
                 : 0);
-            
-            // Calculate absolute position: sum of all previous files + current position in this file
+
             long absolutePositionMs = 0;
             for (var i = 0; i < currentNowPlaying.CurrentSourceFileIndex; i++)
             {
                 absolutePositionMs += (long)(currentNowPlaying.SourcePaths[i].Duration * 1000);
             }
             absolutePositionMs += (long)CurrentPosition.TotalMilliseconds;
-            
+
             currentNowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
-            // Calculate progress using the absolute CurrentTimeMs position
             currentNowPlaying.Progress = Math.Ceiling((double)currentNowPlaying.CurrentTimeMs / (currentNowPlaying.Duration * 1000) * 100);
             currentNowPlaying.IsCompleted = currentNowPlaying.Progress >= 99.9;
 
-            await currentNowPlaying.SaveAsync();
+            // Mark dirty and periodically persist based on the 10 second interval
+            MarkPositionDirty();
+            await TryPersistPositionAsync(currentNowPlaying);
         });
     }
 
+
+
+    // Dirty flag helpers
+    private void MarkPositionDirty()
+    {
+        _positionDirty = true;
+    }
+
+    private async Task TryPersistPositionAsync(AudiobookViewModel audiobook)
+    {
+        if (!_positionDirty) return;
+
+        var now = DateTime.UtcNow;
+        if (now - _lastPositionPersistTime < _positionPersistInterval)
+        {
+            return;
+        }
+
+        _positionDirty = false;
+        _lastPositionPersistTime = now;
+
+        try
+        {
+            await audiobook.SaveAsync();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error saving playback position: {ex}");
+            _positionDirty = true; // keep dirty so we try again later
+        }
+    }
     #endregion
 }
