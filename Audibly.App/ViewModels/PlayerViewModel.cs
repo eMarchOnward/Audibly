@@ -444,23 +444,26 @@ public class PlayerViewModel : BindableBase, IDisposable
             await NowPlaying.SaveAsync();
         });
 
-        // If the UI is sorted by last played, re-apply sort so the just-played book moves to the front
-        try
-        {
-            if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
-            {
-                // Small delay so the player UI can initialize before the library view refreshes
-                //await Task.Delay(400);
-                App.ViewModel.ApplySort();
-            }
-        }
-        catch (Exception ex)
-        {
-            // log but do not crash the player
-            App.ViewModel.LoggingService.LogError(ex, true);
-        }
-
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
+
+        // If the UI is sorted by last played, re-apply sort in the background without blocking playback
+        if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Small delay to ensure DateLastPlayed has been saved
+                    await Task.Delay(380);
+                    App.ViewModel.ApplySort();
+                }
+                catch (Exception ex)
+                {
+                    // log but do not crash the player
+                    App.ViewModel.LoggingService.LogError(ex, true);
+                }
+            });
+        }
     }
 
     public void JumpToPosition(long positionMs)
