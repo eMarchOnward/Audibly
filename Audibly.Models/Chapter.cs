@@ -136,4 +136,23 @@ public class ChapterInfo : DbObject, IEquatable<ChapterInfo>
         hashCode.Add(Subtitle);
         return hashCode.ToHashCode();
     }
+
+    public string DisplayText
+    {
+        get
+        {
+            var durationMs = EndTime - StartTime;
+            if (durationMs < 0)
+            {
+                durationMs = 0;
+            }
+
+            var ts = TimeSpan.FromMilliseconds(durationMs);
+            var durationText = ts.TotalHours >= 1
+                ? $"{(int)ts.TotalHours}:{ts:mm\\:ss}"
+                : $"{ts:mm\\:ss}";
+
+            return $"{Title} ({durationText})";
+        }
+    }
 }

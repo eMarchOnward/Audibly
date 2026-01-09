@@ -114,7 +114,7 @@
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="models:ChapterInfo">
                                     <TextBlock
-                                        Text="{x:Bind Title}"
+                                        Text="{x:Bind DisplayText}"
                                         TextTrimming="CharacterEllipsis"
                                         TextWrapping="NoWrap" />
                                 </DataTemplate>
