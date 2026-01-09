@@ -2,6 +2,7 @@
 // Created: 04/15/2024
 // Updated: 10/11/2024
 
+using System.IO;
 using Audibly.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,7 +23,14 @@ public class AudiblyContext : DbContext
         if (!optionsBuilder.IsConfigured)
         {
             var folderPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dbPath = folderPath + @"\Audibly.db";
+            
+            // Ensure the directory exists
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+            
+            var dbPath = Path.Combine(folderPath, "Audibly.db");
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
         }
     }
@@ -44,6 +52,15 @@ public class AudiblyContext : DbContext
         modelBuilder.Entity<Audiobook>()
             .HasIndex(a => new { a.Author, a.Title })
             .IsUnique();
+
+        modelBuilder.Entity<Tag>()
+            .HasIndex(t => t.NormalizedName)
+            .IsUnique();
+
+        modelBuilder.Entity<Audiobook>()
+            .HasMany<Tag>(a => a.Tags)
+            .WithMany(t => t.Audiobooks)
+            .UsingEntity(j => j.ToTable("AudiobookTag"));
     }
 
     /// <summary>
@@ -56,4 +73,6 @@ public class AudiblyContext : DbContext
     public DbSet<SourceFile> SourceFiles { get; set; }
 
     public DbSet<Bookmark> Bookmarks { get; set; }
+
+    public DbSet<Tag> Tags { get; set; }
 }

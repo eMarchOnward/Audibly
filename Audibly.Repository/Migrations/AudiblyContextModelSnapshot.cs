@@ -44,10 +44,10 @@ namespace Audibly.Repository.Migrations
                     b.Property<int>("CurrentTimeMs")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("DateLastPlayed")
+                    b.Property<DateTime?>("DateImported")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("DateImported")
+                    b.Property<DateTime?>("DateLastPlayed")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -192,6 +192,43 @@ namespace Audibly.Repository.Migrations
                     b.ToTable("SourceFiles");
                 });
 
+            modelBuilder.Entity("Audibly.Models.Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Tags");
+                });
+
+            modelBuilder.Entity("AudiobookTag", b =>
+                {
+                    b.Property<Guid>("AudiobooksId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TagsId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AudiobooksId", "TagsId");
+
+                    b.HasIndex("TagsId");
+
+                    b.ToTable("AudiobookTag", (string)null);
+                });
+
             modelBuilder.Entity("Audibly.Models.Bookmark", b =>
                 {
                     b.HasOne("Audibly.Models.Audiobook", "Audiobook")
@@ -223,6 +260,21 @@ namespace Audibly.Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("Audiobook");
+                });
+
+            modelBuilder.Entity("AudiobookTag", b =>
+                {
+                    b.HasOne("Audibly.Models.Audiobook", null)
+                        .WithMany()
+                        .HasForeignKey("AudiobooksId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Audibly.Models.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Audibly.Models.Audiobook", b =>

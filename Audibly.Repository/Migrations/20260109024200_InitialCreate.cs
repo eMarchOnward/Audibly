@@ -19,26 +19,59 @@ namespace Audibly.Repository.Migrations
                     Author = table.Column<string>(type: "TEXT", nullable: false),
                     Composer = table.Column<string>(type: "TEXT", nullable: false),
                     CurrentSourceFileIndex = table.Column<int>(type: "INTEGER", nullable: false),
-                    CurrentChapterIndex = table.Column<int>(type: "INTEGER", nullable: true),
-                    CurrentTimeMs = table.Column<int>(type: "INTEGER", nullable: false),
-                    Progress = table.Column<double>(type: "REAL", nullable: false),
                     DateLastPlayed = table.Column<DateTime>(type: "TEXT", nullable: true),
                     DateImported = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Description = table.Column<string>(type: "TEXT", nullable: false),
                     Duration = table.Column<long>(type: "INTEGER", nullable: false),
+                    CurrentTimeMs = table.Column<int>(type: "INTEGER", nullable: false),
                     CoverImagePath = table.Column<string>(type: "TEXT", nullable: false),
                     ThumbnailPath = table.Column<string>(type: "TEXT", nullable: false),
                     IsNowPlaying = table.Column<bool>(type: "INTEGER", nullable: false),
                     PlaybackSpeed = table.Column<double>(type: "REAL", nullable: false),
+                    Progress = table.Column<double>(type: "REAL", nullable: false),
                     ReleaseDate = table.Column<DateTime>(type: "TEXT", nullable: true),
                     Title = table.Column<string>(type: "TEXT", nullable: false),
                     Volume = table.Column<double>(type: "REAL", nullable: false),
-
+                    CurrentChapterIndex = table.Column<int>(type: "INTEGER", nullable: true),
                     IsCompleted = table.Column<bool>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Audiobooks", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Tags",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    NormalizedName = table.Column<string>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Tags", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Bookmarks",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Note = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    PositionMs = table.Column<long>(type: "INTEGER", nullable: false),
+                    AudiobookId = table.Column<Guid>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Bookmarks", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Bookmarks_Audiobooks_AudiobookId",
+                        column: x => x.AudiobookId,
+                        principalTable: "Audiobooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -91,22 +124,25 @@ namespace Audibly.Repository.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Bookmarks",
+                name: "AudiobookTag",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Note = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    PositionMs = table.Column<long>(type: "INTEGER", nullable: false),
-                    AudiobookId = table.Column<Guid>(type: "TEXT", nullable: false)
+                    AudiobooksId = table.Column<Guid>(type: "TEXT", nullable: false),
+                    TagsId = table.Column<Guid>(type: "TEXT", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Bookmarks", x => x.Id);
+                    table.PrimaryKey("PK_AudiobookTag", x => new { x.AudiobooksId, x.TagsId });
                     table.ForeignKey(
-                        name: "FK_Bookmarks_Audiobooks_AudiobookId",
-                        column: x => x.AudiobookId,
+                        name: "FK_AudiobookTag_Audiobooks_AudiobooksId",
+                        column: x => x.AudiobooksId,
                         principalTable: "Audiobooks",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AudiobookTag_Tags_TagsId",
+                        column: x => x.TagsId,
+                        principalTable: "Tags",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -116,6 +152,16 @@ namespace Audibly.Repository.Migrations
                 table: "Audiobooks",
                 columns: new[] { "Author", "Title" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AudiobookTag_TagsId",
+                table: "AudiobookTag",
+                column: "TagsId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Bookmarks_AudiobookId",
+                table: "Bookmarks",
+                column: "AudiobookId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Chapters_AudiobookId",
@@ -128,14 +174,18 @@ namespace Audibly.Repository.Migrations
                 column: "AudiobookId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Bookmarks_AudiobookId",
-                table: "Bookmarks",
-                column: "AudiobookId");
+                name: "IX_Tags_NormalizedName",
+                table: "Tags",
+                column: "NormalizedName",
+                unique: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "AudiobookTag");
+
             migrationBuilder.DropTable(
                 name: "Bookmarks");
 
@@ -144,6 +194,9 @@ namespace Audibly.Repository.Migrations
 
             migrationBuilder.DropTable(
                 name: "SourceFiles");
+
+            migrationBuilder.DropTable(
+                name: "Tags");
 
             migrationBuilder.DropTable(
                 name: "Audiobooks");
