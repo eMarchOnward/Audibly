@@ -387,6 +387,61 @@ public sealed partial class AudiobookTile : UserControl
         return sanitized;
     }
 
+    private static string NormalizeTagName(string tagName)
+    {
+        if (string.IsNullOrWhiteSpace(tagName)) return string.Empty;
+        
+        // Trim leading/trailing spaces
+        var normalized = tagName.Trim();
+        
+        // Replace internal spaces with underscores
+        normalized = normalized.Replace(' ', '_');
+        
+        // Remove any non-alphanumeric characters except underscores and hyphens
+        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '-').ToArray());
+        
+        // Convert to lowercase for case-insensitive comparison
+        return normalized.ToLowerInvariant();
+    }
+
+    private static List<Tag> ParseTagsFromText(string tagsText)
+    {
+        if (string.IsNullOrWhiteSpace(tagsText))
+            return new List<Tag>();
+
+        var tagNames = tagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var tags = new List<Tag>();
+
+        foreach (var tagName in tagNames)
+        {
+            var displayName = tagName.Trim().Replace(' ', '_'); // Replace spaces with underscores for display
+            var normalizedName = NormalizeTagName(tagName);
+            
+            if (string.IsNullOrEmpty(normalizedName))
+                continue;
+
+            // Check if we already have this tag (avoid duplicates)
+            if (tags.Any(t => t.NormalizedName == normalizedName))
+                continue;
+
+            tags.Add(new Tag
+            {
+                Name = displayName,
+                NormalizedName = normalizedName
+            });
+        }
+
+        return tags;
+    }
+
+    private static string TagsToCommaSeparatedString(List<Tag> tags)
+    {
+        if (tags == null || tags.Count == 0)
+            return string.Empty;
+
+        return string.Join(", ", tags.Select(t => t.Name));
+    }
+
     private async void EditInfo_OnClick(object sender, RoutedEventArgs e)
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
@@ -429,6 +484,15 @@ public sealed partial class AudiobookTile : UserControl
             UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
         });
 
+        // Tags text box - load current tags as comma-separated string
+        var tagsText = TagsToCommaSeparatedString(audiobook.Model.Tags);
+        var tagsBox = new TextBox 
+        { 
+            Header = "Tags (comma-separated)", 
+            PlaceholderText = "e.g., fiction, mystery, thriller",
+            Text = tagsText
+        };
+
         var descBox = new TextBox { Header = "Description", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
         descBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
         {
@@ -457,6 +521,7 @@ public sealed partial class AudiobookTile : UserControl
             MinWidth = 400  // Add MinWidth here to ensure content is at least 400px wide
         };
         panel.Children.Add(grid);
+        panel.Children.Add(tagsBox);
         panel.Children.Add(descBox);
         panel.DataContext = ViewModel;
 
@@ -485,6 +550,13 @@ public sealed partial class AudiobookTile : UserControl
             audiobook.Model.Author = newAuthor;
             audiobook.Model.Composer = newNarrator;
             audiobook.Model.Description = newDescription;
+
+            // Parse and update tags - create fresh instances without tracking
+            var newTags = ParseTagsFromText(tagsBox.Text);
+            
+            // Replace the entire Tags list to avoid EF tracking issues
+            audiobook.Model.Tags = newTags;
+
             // Mark the audiobook as modified so SaveAsync will actually save
             audiobook.IsModified = true;
             // Persist

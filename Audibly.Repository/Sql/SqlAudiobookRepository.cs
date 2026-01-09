@@ -99,53 +99,176 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
     // C#
     public async Task<Audiobook?> UpsertAsync(Audiobook audiobook)
     {
-        // load tracked entity (look up by Id first, fall back to Title+Author)
-        var existing = await db.Audiobooks
-            .Include(a => a.SourcePaths)
-            .Include(a => a.Chapters)
-            .Include(a => a.Bookmarks)
-            .Include(a => a.Tags)
-            .FirstOrDefaultAsync(a => a.Id == audiobook.Id
-                || (a.Title == audiobook.Title && a.Author == audiobook.Author));
-
-        if (existing == null)
+        try
         {
-            db.Audiobooks.Add(audiobook);
-        }
-        else
-        {
-            // if found by Title/Author but different Id -> handle conflict explicitly
-            if (existing.Id != audiobook.Id)
-                return null; // or merge, or signal conflict
+            // load tracked entity (look up by Id first, fall back to Title+Author)
+            var existing = await db.Audiobooks
+                .Include(a => a.SourcePaths)
+                .Include(a => a.Chapters)
+                .Include(a => a.Bookmarks)
+                .Include(a => a.Tags)
+                .FirstOrDefaultAsync(a => a.Id == audiobook.Id
+                    || (a.Title == audiobook.Title && a.Author == audiobook.Author));
 
-            // copy scalar properties
-            db.Entry(existing).CurrentValues.SetValues(audiobook);
-
-            // reconcile SourcePaths: add/update/remove by Id
-            var incomingById = audiobook.SourcePaths.ToDictionary(s => s.Id);
-            foreach (var src in existing.SourcePaths.ToList())
+            if (existing == null)
             {
-                if (!incomingById.TryGetValue(src.Id, out var incoming))
+                // For new audiobook, resolve tags first
+                await ResolveTags(audiobook);
+                db.Audiobooks.Add(audiobook);
+            }
+            else
+            {
+                // if found by Title/Author but different Id -> handle conflict explicitly
+                if (existing.Id != audiobook.Id)
+                    return null; // or merge, or signal conflict
+
+                // copy scalar properties
+                db.Entry(existing).CurrentValues.SetValues(audiobook);
+
+                // reconcile SourcePaths: add/update/remove by Id
+                var incomingById = audiobook.SourcePaths?.ToDictionary(s => s.Id) ?? new Dictionary<Guid, SourceFile>();
+                foreach (var src in existing.SourcePaths.ToList())
                 {
-                    // removed
-                    db.Remove(src);
+                    if (!incomingById.TryGetValue(src.Id, out var incoming))
+                    {
+                        // removed
+                        db.Remove(src);
+                    }
+                    else
+                    {
+                        // update scalar props
+                        db.Entry(src).CurrentValues.SetValues(incoming);
+                        incomingById.Remove(src.Id);
+                    }
+                }
+                // remaining incoming are new
+                foreach (var newSrc in incomingById.Values)
+                    existing.SourcePaths.Add(newSrc);
+
+                // Handle Tags: completely replace the collection
+                await UpdateTags(existing, audiobook.Tags ?? new List<Tag>());
+
+                // repeat reconciliation for Chapters and Bookmarks
+            }
+
+            await db.SaveChangesAsync();
+            return audiobook;
+        }
+        catch (Exception ex)
+        {
+            // Log the actual exception details
+            Console.WriteLine($"Error in UpsertAsync: {ex.Message}");
+            Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
+            throw;
+        }
+    }
+
+    private async Task UpdateTags(Audiobook existingAudiobook, List<Tag> newTags)
+    {
+        try
+        {
+            // Remove all existing tag relationships
+            existingAudiobook.Tags.Clear();
+
+            // If no new tags, we're done
+            if (newTags == null || newTags.Count == 0)
+                return;
+
+            // Process each new tag
+            foreach (var incomingTag in newTags)
+            {
+                System.Diagnostics.Debug.WriteLine($"Processing tag: {incomingTag.Name} (Normalized: {incomingTag.NormalizedName}, Id: {incomingTag.Id})");
+                
+                // Find or create the tag in the database
+                var dbTag = await db.Tags
+                    .Where(t => t.NormalizedName == incomingTag.NormalizedName)
+                    .FirstOrDefaultAsync();
+
+                if (dbTag != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Found existing tag in DB: {dbTag.Name} (Id: {dbTag.Id})");
+                    
+                    // Tag exists - attach it if not already tracked
+                    var entry = db.Entry(dbTag);
+                    System.Diagnostics.Debug.WriteLine($"Tag entry state: {entry.State}");
+                    
+                    if (entry.State == EntityState.Detached)
+                    {
+                        db.Tags.Attach(dbTag);
+                        System.Diagnostics.Debug.WriteLine("Attached tag to context");
+                    }
+                    existingAudiobook.Tags.Add(dbTag);
+                    System.Diagnostics.Debug.WriteLine("Added tag to audiobook");
                 }
                 else
                 {
-                    // update scalar props
-                    db.Entry(src).CurrentValues.SetValues(incoming);
-                    incomingById.Remove(src.Id);
+                    System.Diagnostics.Debug.WriteLine("Creating new tag");
+                    
+                    // Tag doesn't exist - create a new one
+                    var newTag = new Tag
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = incomingTag.Name,
+                        NormalizedName = incomingTag.NormalizedName
+                    };
+                    
+                    System.Diagnostics.Debug.WriteLine($"New tag created with Id: {newTag.Id}");
+                    db.Tags.Add(newTag);
+                    System.Diagnostics.Debug.WriteLine("Added new tag to context");
+                    existingAudiobook.Tags.Add(newTag);
+                    System.Diagnostics.Debug.WriteLine("Added new tag to audiobook");
                 }
             }
-            // remaining incoming are new
-            foreach (var newSrc in incomingById.Values)
-                existing.SourcePaths.Add(newSrc);
-
-            // repeat reconciliation for Chapters and Bookmarks
         }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error in UpdateTags: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                System.Diagnostics.Debug.WriteLine($"Inner exception: {ex.InnerException.Message}");
+            }
+            throw;
+        }
+    }
 
-        await db.SaveChangesAsync();
-        return audiobook;
+    private async Task ResolveTags(Audiobook audiobook)
+    {
+        if (audiobook.Tags == null || audiobook.Tags.Count == 0)
+            return;
+
+        var originalTags = audiobook.Tags.ToList();
+        audiobook.Tags.Clear();
+
+        foreach (var tag in originalTags)
+        {
+            // Check if tag already exists in database by normalized name
+            var existingTag = await db.Tags
+                .Where(t => t.NormalizedName == tag.NormalizedName)
+                .FirstOrDefaultAsync();
+
+            if (existingTag != null)
+            {
+                // Use existing tag - attach if needed
+                var entry = db.Entry(existingTag);
+                if (entry.State == EntityState.Detached)
+                {
+                    db.Tags.Attach(existingTag);
+                }
+                audiobook.Tags.Add(existingTag);
+            }
+            else
+            {
+                // Create new tag with explicit ID
+                var newTag = new Tag
+                {
+                    Id = Guid.NewGuid(),
+                    Name = tag.Name,
+                    NormalizedName = tag.NormalizedName
+                };
+                audiobook.Tags.Add(newTag);
+            }
+        }
     }
 
     public async Task DeleteAsync(Guid audiobookId)

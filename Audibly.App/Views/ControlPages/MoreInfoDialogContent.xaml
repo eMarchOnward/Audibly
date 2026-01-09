@@ -135,6 +135,19 @@
             HorizontalAlignment="Left"
             Margin="0,10,0,0">
             <StackPanel>
+                <!--  tags text block  -->
+                <TextBlock
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="0,0,0,10"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind TagsVisibility}"
+                    x:Name="TagsText">
+                    <Run FontWeight="Bold">Tags:</Run>
+                    <Run Text="{x:Bind TagsString}" />
+                </TextBlock>
+
                 <!--  description text block  -->
                 <TextBlock
                     FontSize="14"
