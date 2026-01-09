@@ -92,6 +92,13 @@ public class AudiobookViewModel : BindableBase
         OnPropertyChanged(nameof(ThumbnailPath));
     }
 
+    /// <summary>
+    ///     Refreshes the progress properties to force UI update.
+    /// </summary>
+    public void RefreshProgress()
+    {
+        OnPropertyChanged(nameof(Progress));
+    }
 
     #region model database properties
 

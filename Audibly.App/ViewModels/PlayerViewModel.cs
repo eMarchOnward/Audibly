@@ -440,7 +440,10 @@ public class PlayerViewModel : BindableBase, IDisposable
             // Reset persistence tracking for the new audiobook
             _positionDirty = false;
             _lastPositionPersistTime = DateTime.UtcNow;
-
+            
+            // Update progress once when opening
+            UpdateAudiobookProgress();
+            NowPlaying.RefreshProgress();
             await NowPlaying.SaveAsync();
         });
 
@@ -601,6 +604,10 @@ public class PlayerViewModel : BindableBase, IDisposable
             // Restore playback speed - MediaPlayer resets to 1.0 when a new source is loaded
             MediaPlayer.PlaybackRate = PlaybackSpeed;
             Debug.WriteLine($"[MediaOpened] Restored playback speed to {PlaybackSpeed}x");
+
+            // Update progress when a new file opens (chapter changed across files)
+            UpdateAudiobookProgress();
+            NowPlaying.RefreshProgress();
         });
     }
 
@@ -684,9 +691,10 @@ public class PlayerViewModel : BindableBase, IDisposable
                         PlayPauseIcon = Symbol.Play;
                     }
 
-                    // On pause, flush any pending position changes
+                    // On pause, update progress and flush any pending position changes
                     if (NowPlaying != null)
                     {
+                        UpdateAudiobookProgress();
                         await TryPersistPositionAsync(NowPlaying);
                     }
                 });
@@ -697,11 +705,10 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private async void PlaybackSession_PositionChanged(MediaPlaybackSession sender, object args)
     {
-        if (NowPlaying == null) return;
-
-        if (_isSwitchingSourceFiles) return;
+        if (NowPlaying == null || _isSwitchingSourceFiles) return;
 
         var currentNowPlaying = NowPlaying;
+        var currentPositionMs = CurrentPosition.TotalMilliseconds; // Capture early on the correct thread
 
         var now = DateTime.UtcNow;
         if (now - _lastPositionUiUpdate < _positionUpdateInterval)
@@ -711,11 +718,12 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         _lastPositionUiUpdate = now;
 
-        if (!currentNowPlaying.CurrentChapter.InRange(CurrentPosition.TotalMilliseconds))
+        // Only update chapter if we detect a change
+        if (!currentNowPlaying.CurrentChapter.InRange(currentPositionMs))
         {
             var newChapter = currentNowPlaying.Chapters.FirstOrDefault(c =>
                 c.ParentSourceFileIndex == currentNowPlaying.CurrentSourceFileIndex &&
-                c.InRange(CurrentPosition.TotalMilliseconds));
+                c.InRange(currentPositionMs));
 
             if (newChapter != null)
                 _ = _dispatcherQueue.EnqueueAsync(() =>
@@ -725,33 +733,38 @@ public class PlayerViewModel : BindableBase, IDisposable
                         currentNowPlaying.CurrentChapterIndex = ChapterComboSelectedIndex = newChapter.Index;
                         currentNowPlaying.CurrentChapterTitle = newChapter.Title;
                         ChapterDurationMs = (int)(currentNowPlaying.CurrentChapter.EndTime - currentNowPlaying.CurrentChapter.StartTime);
+
+                        // Update progress now that chapter changed and notify the UI for the tile
+                        UpdateAudiobookProgress();
+                        currentNowPlaying.RefreshProgress();
                     }
                 });
         }
 
-        _ = _dispatcherQueue.EnqueueAsync(async () =>
+        // Lightweight UI update - chapter position only (must be on UI thread)
+        _ = _dispatcherQueue.EnqueueAsync(() =>
         {
             if (NowPlaying != currentNowPlaying) return;
-
-            if (_isSwitchingSourceFiles) return;
-
-            ChapterPositionMs = (int)(CurrentPosition.TotalMilliseconds > currentNowPlaying.CurrentChapter.StartTime
-                ? CurrentPosition.TotalMilliseconds - currentNowPlaying.CurrentChapter.StartTime
+            
+            ChapterPositionMs = (int)(currentPositionMs > currentNowPlaying.CurrentChapter.StartTime
+                ? currentPositionMs - currentNowPlaying.CurrentChapter.StartTime
                 : 0);
+        });
+
+        // Calculate and persist position in background without blocking
+        _ = Task.Run(async () =>
+        {
+            if (NowPlaying != currentNowPlaying) return;
 
             long absolutePositionMs = 0;
             for (var i = 0; i < currentNowPlaying.CurrentSourceFileIndex; i++)
             {
                 absolutePositionMs += (long)(currentNowPlaying.SourcePaths[i].Duration * 1000);
             }
-            absolutePositionMs += (long)CurrentPosition.TotalMilliseconds;
+            absolutePositionMs += (long)currentPositionMs;
 
             currentNowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
-            currentNowPlaying.Progress = Math.Ceiling((double)currentNowPlaying.CurrentTimeMs / (currentNowPlaying.Duration * 1000) * 100);
-            currentNowPlaying.IsCompleted = currentNowPlaying.Progress >= 99.9;
-
-            // Mark dirty and periodically persist based on the 10 second interval
             MarkPositionDirty();
             await TryPersistPositionAsync(currentNowPlaying);
         });
@@ -787,6 +800,14 @@ public class PlayerViewModel : BindableBase, IDisposable
             Debug.WriteLine($"Error saving playback position: {ex}");
             _positionDirty = true; // keep dirty so we try again later
         }
+    }
+
+    public void UpdateAudiobookProgress()
+    {
+        if (NowPlaying == null) return;
+
+        NowPlaying.Progress = Math.Ceiling((double)NowPlaying.CurrentTimeMs / (NowPlaying.Duration * 1000) * 100);
+        NowPlaying.IsCompleted = NowPlaying.Progress >= 99.9;
     }
     #endregion
 }

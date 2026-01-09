@@ -16,6 +16,10 @@ public sealed partial class PlaySkipButtonsStack : UserControl
     private static readonly TimeSpan _skipBackButtonAmount = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan _skipForwardButtonAmount = TimeSpan.FromSeconds(30);
 
+    // Track last previous chapter button click time
+    private DateTime _lastPreviousChapterClick = DateTime.MinValue;
+    private static readonly TimeSpan _doubleClickThreshold = TimeSpan.FromSeconds(3);
+
     public static readonly DependencyProperty SpacingProperty = DependencyProperty.Register(
         nameof(Spacing), typeof(double), typeof(PlaySkipButtonsStack), new PropertyMetadata(0.0));
 
@@ -62,58 +66,84 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         if (PlayerViewModel.NowPlaying is null || PlayerViewModel.NowPlaying.CurrentChapter is null)
             return;
 
+        var now = DateTime.UtcNow;
+        var timeSinceLastClick = now - _lastPreviousChapterClick;
+        _lastPreviousChapterClick = now;
+
         var currentPos = PlayerViewModel.CurrentPosition;
         var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
-        
-        // If we're not at the start of the current chapter (with a small tolerance), go to chapter start first
-        var tolerance = TimeSpan.FromSeconds(2); // 2-second tolerance to account for small variations
-        if (currentPos > chapterStart + tolerance)
+        var tolerance = TimeSpan.FromSeconds(2);
+
+        // Check if this is a "double click" (within 3 seconds of last click)
+        var isDoubleClick = timeSinceLastClick <= _doubleClickThreshold;
+
+        // If double-click OR we're within 2 seconds of chapter start, go to previous chapter
+        if (isDoubleClick || currentPos <= chapterStart + tolerance)
         {
+            // Go to previous chapter
+            var currentChapterIndex = PlayerViewModel.NowPlaying.CurrentChapterIndex ?? 0;
+            
+            // Can't go back if we're at the first chapter
+            if (currentChapterIndex <= 0)
+                return;
+
+            var newChapterIndex = currentChapterIndex - 1;
+            var previousChapter = PlayerViewModel.NowPlaying.Chapters[newChapterIndex];
+            
+            // Check if previous chapter is in a different source file
+            if (previousChapter.ParentSourceFileIndex != PlayerViewModel.NowPlaying.CurrentSourceFileIndex)
+            {
+                // remember play status so we can resume if it was playing before navigation
+                var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+
+                // Calculate absolute position at the start of the previous chapter
+                long absolutePositionMs = 0;
+                for (var i = 0; i < previousChapter.ParentSourceFileIndex; i++)
+                {
+                    absolutePositionMs += (long)(PlayerViewModel.NowPlaying.SourcePaths[i].Duration * 1000);
+                }
+                absolutePositionMs += (long)previousChapter.StartTime;
+
+                // OpenSourceFile will handle setting CurrentTimeMs and position via AudioPlayer_MediaOpened
+                PlayerViewModel.OpenSourceFile(previousChapter.ParentSourceFileIndex, newChapterIndex, (int)absolutePositionMs);
+                
+                // Update progress since chapter changed
+                PlayerViewModel.UpdateAudiobookProgress();
+                PlayerViewModel.NowPlaying.RefreshProgress();
+                
+                await PlayerViewModel.NowPlaying.SaveAsync();
+
+                // If playback was ongoing before navigation, resume it.
+                if (wasPlaying)
+                    PlayerViewModel.SetPendingAutoPlay(true);
+
+                return;
+            }
+
+            // Previous chapter is in same file - just update position
+            PlayerViewModel.NowPlaying.CurrentChapterIndex = newChapterIndex;
+            PlayerViewModel.NowPlaying.CurrentChapterTitle = previousChapter.Title;
+            PlayerViewModel.ChapterComboSelectedIndex = newChapterIndex;
+            PlayerViewModel.ChapterDurationMs = (int)(previousChapter.EndTime - previousChapter.StartTime);
+            PlayerViewModel.CurrentPosition = TimeSpan.FromMilliseconds(previousChapter.StartTime);
+
+            // Update progress since chapter changed
+            PlayerViewModel.UpdateAudiobookProgress();
+            PlayerViewModel.NowPlaying.RefreshProgress();
+
+            await PlayerViewModel.NowPlaying.SaveAsync();
+        }
+        else
+        {
+            // Single click and we're more than 2 seconds into chapter - go to chapter start
             PlayerViewModel.CurrentPosition = chapterStart;
+            
+            // Update progress since we moved position
+            PlayerViewModel.UpdateAudiobookProgress();
+            PlayerViewModel.NowPlaying.RefreshProgress();
+            
             await PlayerViewModel.NowPlaying.SaveAsync();
-            return;
         }
-
-        // If we're at/near the start of the current chapter, proceed to previous chapter
-        if (PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1 > 0 &&
-            PlayerViewModel.NowPlaying?.Chapters[(int)(PlayerViewModel.NowPlaying?.CurrentChapterIndex - 1)]
-                .ParentSourceFileIndex != PlayerViewModel.NowPlaying?.CurrentSourceFileIndex)
-        {
-            // remember play status so we can resume if it was playing before navigation
-            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
-
-            var newChapterIdx = (int)PlayerViewModel.NowPlaying.CurrentChapterIndex - 1;
-            PlayerViewModel.OpenSourceFile(PlayerViewModel.NowPlaying.CurrentSourceFileIndex - 1, newChapterIdx);
-            PlayerViewModel.CurrentPosition =
-                TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.Chapters[newChapterIdx].StartTime);
-            await PlayerViewModel.NowPlaying.SaveAsync();
-
-            // If playback was ongoing before navigation, resume it.
-            // Calling Play() here is safe: MediaPlayer.Play() will start playback once media is opened/ready.
-            if (wasPlaying)
-                PlayerViewModel.MediaPlayer.Play();
-
-            return;
-        }
-
-        var newChapterIndex = PlayerViewModel.NowPlaying.CurrentChapterIndex - 1 >= 0
-            ? PlayerViewModel.NowPlaying.CurrentChapterIndex - 1
-            : PlayerViewModel.NowPlaying.CurrentChapterIndex;
-
-        if (newChapterIndex == null) return;
-
-        // PlayerViewModel.NowPlaying.CurrentChapter = PlayerViewModel.NowPlaying.Chapters[(int)newChapterIndex];
-        PlayerViewModel.NowPlaying.CurrentChapterIndex = newChapterIndex;
-        PlayerViewModel.NowPlaying.CurrentChapterTitle =
-            PlayerViewModel.NowPlaying.Chapters[(int)newChapterIndex].Title;
-        PlayerViewModel.ChapterComboSelectedIndex = (int)newChapterIndex;
-        PlayerViewModel.ChapterDurationMs =
-            (int)(PlayerViewModel.NowPlaying.CurrentChapter.EndTime -
-                  PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
-        PlayerViewModel.CurrentPosition =
-            TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
-
-        await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
     private async void NextChapterButton_Click(object sender, RoutedEventArgs e)
@@ -130,6 +160,11 @@ public sealed partial class PlaySkipButtonsStack : UserControl
             PlayerViewModel.OpenSourceFile(PlayerViewModel.NowPlaying.CurrentSourceFileIndex + 1, newChapterIdx);
             PlayerViewModel.CurrentPosition =
                 TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.Chapters[newChapterIdx].StartTime);
+            
+            // Update progress since chapter changed
+            PlayerViewModel.UpdateAudiobookProgress();
+            PlayerViewModel.NowPlaying.RefreshProgress();
+            
             await PlayerViewModel.NowPlaying.SaveAsync();
 
             // If playback was ongoing before navigation, resume it.
@@ -160,6 +195,10 @@ public sealed partial class PlaySkipButtonsStack : UserControl
                   PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
         PlayerViewModel.CurrentPosition =
             TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
+
+        // Update progress since chapter changed
+        PlayerViewModel.UpdateAudiobookProgress();
+        PlayerViewModel.NowPlaying.RefreshProgress();
 
         await PlayerViewModel.NowPlaying.SaveAsync();
     }

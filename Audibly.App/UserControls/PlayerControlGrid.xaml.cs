@@ -104,6 +104,10 @@ public sealed partial class PlayerControlGrid : UserControl
         // Always update CurrentTimeMs to the absolute position
         PlayerViewModel.NowPlaying.CurrentTimeMs = (int)absolutePositionMs;
 
+        // Update progress and notify UI since chapter changed
+        PlayerViewModel.UpdateAudiobookProgress();
+        PlayerViewModel.NowPlaying.RefreshProgress();
+
         // check if the newly selected chapter is in a different source file than the current chapter
         if (PlayerViewModel.NowPlaying != null &&
             PlayerViewModel.NowPlaying.CurrentSourceFile.Index != newChapter.ParentSourceFileIndex)
