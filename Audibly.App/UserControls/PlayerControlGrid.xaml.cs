@@ -60,6 +60,12 @@ public sealed partial class PlayerControlGrid : UserControl
                 IsTabStop = true;
                 Focus(FocusState.Programmatic);
             }
+            
+            // Sync the volume and playback speed sliders with current ViewModel values
+            if (VolumeLevelSlider != null)
+                VolumeLevelSlider.Value = PlayerViewModel.VolumeLevel;
+            if (PlaybackSpeedSlider != null)
+                PlaybackSpeedSlider.Value = PlayerViewModel.PlaybackSpeed;
         };
     }
 

@@ -78,6 +78,12 @@ public sealed partial class NewMiniPlayerPage : Page
         // Request focus so that KeyDown will fire when the page is visible.
         // If another control must keep focus, consider using KeyboardAccelerators instead.
         _ = this.Focus(FocusState.Programmatic);
+        
+        // Sync the volume and playback speed sliders with current ViewModel values
+        if (VolumeLevelSlider != null)
+            VolumeLevelSlider.Value = PlayerViewModel.VolumeLevel;
+        if (PlaybackSpeedSlider != null)
+            PlaybackSpeedSlider.Value = PlayerViewModel.PlaybackSpeed;
     }
 
     private void NewMiniPlayerPage_Unloaded(object sender, RoutedEventArgs e)
