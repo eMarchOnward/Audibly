@@ -498,7 +498,8 @@ public sealed partial class NewMiniPlayerPage : Page
     private void BackToLibraryButton_Click(object sender, RoutedEventArgs e)
     {
         WindowHelper.RestoreMainWindow();
-        WindowHelper.HideMiniPlayer();
+        //WindowHelper.HideMiniPlayer();
+        WindowHelper.CloseMiniPlayer();
     }
 
     private void TimerMenuItem_Click(object sender, RoutedEventArgs e)
