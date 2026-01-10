@@ -120,6 +120,21 @@ public class MainViewModel : BindableBase
     public List<AudiobookViewModel> AudiobooksForFilter { get; } = [];
 
     /// <summary>
+    ///     The collection of all available tags.
+    /// </summary>
+    public ObservableCollection<Tag> AvailableTags { get; } = [];
+
+    /// <summary>
+    ///     The collection of currently selected tags for filtering.
+    /// </summary>
+    public ObservableCollection<Tag> SelectedTags { get; } = [];
+
+    /// <summary>
+    ///     Event raised when selected tags change.
+    /// </summary>
+    public event EventHandler? SelectedTagsChanged;
+
+    /// <summary>
     ///     Gets or sets the selected audiobook, or null if no audiobook is selected.
     /// </summary>
     public AudiobookViewModel? SelectedAudiobook
@@ -345,6 +360,7 @@ public class MainViewModel : BindableBase
             await _dispatcherQueue.EnqueueAsync(() => IsLoading = true);
 
             var audiobooks = (await App.Repository.Audiobooks.GetAsync()).AsList();
+            var tags = (await App.Repository.Audiobooks.GetAllTagsAsync()).ToList();
 
             await _dispatcherQueue.EnqueueAsync(() =>
             {
@@ -356,6 +372,13 @@ public class MainViewModel : BindableBase
                 {
                     Audiobooks.Add(audiobookViewModel);
                     AudiobooksForFilter.Add(audiobookViewModel);
+                }
+
+                // Update available tags
+                AvailableTags.Clear();
+                foreach (var tag in tags)
+                {
+                    AvailableTags.Add(tag);
                 }
 
                 // apply sort after populating lists
@@ -490,6 +513,14 @@ public class MainViewModel : BindableBase
     {
         await _dispatcherQueue.EnqueueAsync(async () =>
             await GetAudiobookListAsync());
+    }
+
+    /// <summary>
+    ///     Raises the SelectedTagsChanged event.
+    /// </summary>
+    public void NotifySelectedTagsChanged()
+    {
+        SelectedTagsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

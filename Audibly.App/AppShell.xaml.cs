@@ -11,6 +11,7 @@ using Audibly.App.Helpers;
 using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.App.Views;
+using Audibly.Models;
 using CommunityToolkit.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -31,6 +32,7 @@ public sealed partial class AppShell : Page
 
     public readonly string LibraryLabel = "Library";
     public readonly string NowPlayingLabel = "Now Playing";
+    public readonly string TagsLabel = "Tags";
 
     /// <summary>
     ///     Initializes a new instance of the AppShell, sets the static 'Current' reference,
@@ -318,5 +320,38 @@ public sealed partial class AppShell : Page
             VisualStateManager.GoToState(this, "Compact", true);
         else
             VisualStateManager.GoToState(this, "Default", true);
+    }
+
+    /// <summary>
+    ///     Handles tag selection changes and filters the audiobook list.
+    /// </summary>
+    private void TagsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ListView listView) return;
+
+        // Update the SelectedTags collection
+        ViewModel.SelectedTags.Clear();
+        foreach (Tag tag in listView.SelectedItems)
+        {
+            ViewModel.SelectedTags.Add(tag);
+        }
+
+        // Notify that selected tags have changed
+        ViewModel.NotifySelectedTagsChanged();
+    }
+
+    private async void ClearTagsLink_Tapped(object sender, RoutedEventArgs e)
+    {
+        // Clear selected tags in the view model
+        ViewModel.SelectedTags.Clear();
+
+        // Clear visual selection in the ListView (if it's instantiated)
+        TagsListView?.SelectedItems.Clear();
+
+        // Notify listeners (LibraryCardPage listens for this and will refilter)
+        ViewModel.NotifySelectedTagsChanged();
+
+        // Optional: explicitly reload the full audiobook list (ensures AvailableTags/data are fresh)
+        await ViewModel.GetAudiobookListAsync();
     }
 }

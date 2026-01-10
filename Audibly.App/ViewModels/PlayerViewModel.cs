@@ -432,7 +432,7 @@ public class PlayerViewModel : BindableBase, IDisposable
             }
 
             NowPlaying.IsNowPlaying = true;
-            NowPlaying.DateLastPlayed = DateTime.Now;
+            //NowPlaying.DateLastPlayed = DateTime.Now;
 
             ChapterComboSelectedIndex = NowPlaying.CurrentChapterIndex ?? 0;
             NowPlaying.CurrentChapterTitle = NowPlaying.Chapters[ChapterComboSelectedIndex].Title;
@@ -679,6 +679,33 @@ public class PlayerViewModel : BindableBase, IDisposable
                 {
                     if (PlayPauseIcon == Symbol.Pause) return;
                     PlayPauseIcon = Symbol.Pause;
+
+                    // Record last-played time when playback starts and save in background
+                    if (NowPlaying != null)
+                    {
+                        NowPlaying.DateLastPlayed = DateTime.Now;
+                        NowPlaying.IsModified = true;
+
+                        // Save asynchronously in the background; reapply sort if necessary
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await NowPlaying.SaveAsync();
+
+                                if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
+                                {
+                                    // small delay to ensure UI/DB consistency (matches existing pattern)
+                                    await Task.Delay(380);
+                                    await _dispatcherQueue.EnqueueAsync(() => App.ViewModel.ApplySort());
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                App.ViewModel.LoggingService.LogError(ex, true);
+                            }
+                        });
+                    }
                 });
 
                 break;

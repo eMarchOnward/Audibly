@@ -345,5 +345,13 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
         await db.SaveChangesAsync();
     }
 
+    public async Task<IEnumerable<Tag>> GetAllTagsAsync()
+    {
+        return await db.Tags
+            .OrderBy(tag => tag.Name)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
     #endregion
 }

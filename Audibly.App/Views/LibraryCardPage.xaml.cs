@@ -61,7 +61,9 @@ public sealed partial class LibraryCardPage : Page
 
         // subscribe to page loaded event
         Loaded += LibraryCardPage_Loaded;
+        Unloaded += LibraryCardPage_Unloaded;
         ViewModel.ResetFilters += ViewModelOnResetFilters;
+        ViewModel.SelectedTagsChanged += ViewModelOnSelectedTagsChanged;
         // keep sort UI in sync with ViewModel and persisted settings
         ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
 
@@ -141,6 +143,9 @@ public sealed partial class LibraryCardPage : Page
         NotStartedFilterCheckBox.IsChecked = false;
         CompletedFilterCheckBox.IsChecked = false;
 
+        // Clear selected tags
+        ViewModel.SelectedTags.Clear();
+
         await _dispatcherQueue.EnqueueAsync(() =>
         {
             ViewModel.Audiobooks.Clear();
@@ -152,15 +157,47 @@ public sealed partial class LibraryCardPage : Page
     {
         // matches audiobooks for each active filter
         var matches = new HashSet<AudiobookViewModel>();
+        var hasTagFilter = ViewModel.SelectedTags.Count > 0;
+        var hasProgressFilter = _activeFilters.Count > 0;
 
         foreach (var audiobook in ViewModel.AudiobooksForFilter)
         {
-            if (_activeFilters.Contains(AudioBookFilter.InProgress) && audiobook.Progress > 0 && !audiobook.IsCompleted)
+            var matchesProgressFilter = false;
+            var matchesTagFilter = false;
+
+            // Check progress filters
+            if (hasProgressFilter)
+            {
+                if (_activeFilters.Contains(AudioBookFilter.InProgress) && audiobook.Progress > 0 && !audiobook.IsCompleted)
+                    matchesProgressFilter = true;
+                if (_activeFilters.Contains(AudioBookFilter.NotStarted) && audiobook.Progress == 0 && !audiobook.IsCompleted)
+                    matchesProgressFilter = true;
+                if (_activeFilters.Contains(AudioBookFilter.Completed) && audiobook.IsCompleted)
+                    matchesProgressFilter = true;
+            }
+            else
+            {
+                matchesProgressFilter = true; // No progress filter active, so all pass
+            }
+
+            // Check tag filters
+            if (hasTagFilter)
+            {
+                // Audiobook must have at least one of the selected tags
+                matchesTagFilter = audiobook.Model.Tags.Any(tag => 
+                    ViewModel.SelectedTags.Any(selectedTag => 
+                        selectedTag.Id == tag.Id));
+            }
+            else
+            {
+                matchesTagFilter = true; // No tag filter active, so all pass
+            }
+
+            // Audiobook must match both filter types (if active)
+            if (matchesProgressFilter && matchesTagFilter)
+            {
                 matches.Add(audiobook);
-            if (_activeFilters.Contains(AudioBookFilter.NotStarted) && audiobook.Progress == 0 && !audiobook.IsCompleted)
-                matches.Add(audiobook);
-            if (_activeFilters.Contains(AudioBookFilter.Completed) && audiobook.IsCompleted)
-                matches.Add(audiobook);
+            }
         }
 
         return matches;
@@ -171,7 +208,7 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     private async Task FilterAudiobookList()
     {
-        if (_activeFilters.Count == 0)
+        if (_activeFilters.Count == 0 && ViewModel.SelectedTags.Count == 0)
         {
             await ResetAudiobookListAsync();
             return;
@@ -514,4 +551,13 @@ public sealed partial class LibraryCardPage : Page
         }
     }
 
+    private void LibraryCardPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        ViewModel.SelectedTagsChanged -= ViewModelOnSelectedTagsChanged;
+    }
+
+    private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
+    {
+        await FilterAudiobookList();
+    }
 }

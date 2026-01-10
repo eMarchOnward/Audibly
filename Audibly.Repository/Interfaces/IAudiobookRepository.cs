@@ -63,4 +63,9 @@ public interface IAudiobookRepository
     /// <param name="progressCallback"></param>
     /// <returns></returns>
     Task DeleteAllAsync(Func<int, int, string, string, Task> progressCallback);
+
+    /// <summary>
+    ///     Returns all tags.
+    /// </summary>
+    Task<IEnumerable<Tag>> GetAllTagsAsync();
 }

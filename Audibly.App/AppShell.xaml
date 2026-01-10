@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:Audibly.Models"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:userControls="using:Audibly.App.UserControls"
     xmlns:viewModels="using:Audibly.App.ViewModels"
@@ -80,6 +81,59 @@
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE768;" />
                     </muxc:NavigationViewItem.Icon>
+                </muxc:NavigationViewItem>
+                <muxc:NavigationViewItem
+                    x:Name="TagsMenuItem"
+                    Content="{x:Bind TagsLabel}"
+                    SelectsOnInvoked="False"
+                    ToolTipService.ToolTip="{x:Bind TagsLabel}">
+                    <muxc:NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE1CB;" />
+                    </muxc:NavigationViewItem.Icon>
+
+                    <!-- reduce indentation of children so they align with the 'Tags' label -->
+                    <muxc:NavigationViewItem.MenuItems>
+                        <!-- Remove the built-in padding of this child NavigationViewItem and shift its content left -->
+                        <muxc:NavigationViewItem SelectsOnInvoked="False" Padding="0" Margin="0">
+                            <muxc:NavigationViewItem.Content>
+                                <!-- Negative left margin offsets the nav submenu indent so child content lines up with the parent label -->
+                                <StackPanel Margin="-12,0,0,0">
+                                    <!-- Show all link (left aligned and styled like tag rows) -->
+                                    <HyperlinkButton
+                                        x:Name="ClearTagsLink"
+                                        Margin="7,4,0,6"
+                                        Padding="3"
+                                        HorizontalAlignment="Left"
+                                        IsHitTestVisible="True"
+                                        Click="ClearTagsLink_Tapped"
+                                        BorderThickness="0">
+                                        <TextBlock Text="Show All" TextDecorations="None" />
+                                    </HyperlinkButton>
+
+                                    <ListView
+                                        x:Name="TagsListView"
+                                        ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
+                                        SelectionMode="Extended"
+                                        SelectionChanged="TagsListView_SelectionChanged"
+                                        MaxHeight="450"
+                                        Margin="0">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem">
+                                                <!-- remove left padding that ListViewItems normally have -->
+                                                <Setter Property="Padding" Value="0"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                            </Style>
+                                        </ListView.ItemContainerStyle>
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:Tag">
+                                                <TextBlock Text="{x:Bind Name}" Margin="10,4,0,4" />
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </muxc:NavigationViewItem.Content>
+                        </muxc:NavigationViewItem>
+                    </muxc:NavigationViewItem.MenuItems>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
 
