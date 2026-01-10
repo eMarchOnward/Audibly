@@ -56,7 +56,7 @@ public interface IAudiobookRepository
     ///     Deletes a audiobook.
     /// </summary>
     Task DeleteAsync(Guid audiobookId);
-    
+
     /// <summary>
     ///     Deletes all audiobooks.
     /// </summary>
@@ -68,4 +68,9 @@ public interface IAudiobookRepository
     ///     Returns all tags.
     /// </summary>
     Task<IEnumerable<Tag>> GetAllTagsAsync();
+
+    /// <summary>
+    ///     Deletes the orphaned tags.
+    /// </summary>
+    Task DeleteOrphanedTagsAsync();
 }

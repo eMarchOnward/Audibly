@@ -163,10 +163,21 @@ public sealed partial class AudiobookTile : UserControl
 
     private async void ButtonTile_Click(object sender, RoutedEventArgs e)
     {
-
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
 
+        // Check if Ctrl key is pressed
+        var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
+        var isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+
+        if (isCtrlPressed)
+        {
+            // Open Edit Info dialog when Ctrl is held
+            EditInfo_OnClick(sender, e);
+            return;
+        }
+
+        // Normal play/pause logic
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
             var currentAudiobook = PlayerViewModel.NowPlaying;
@@ -448,6 +459,10 @@ public sealed partial class AudiobookTile : UserControl
         if (audiobook == null) return;
         ViewModel.SelectedAudiobook = audiobook;
 
+        // Load all existing tags from the database for suggestions
+        var allTags = await App.Repository.Audiobooks.GetAllTagsAsync();
+        var tagSuggestions = allTags.Select(t => t.Name).ToList();
+
         // Build dialog content inline
         var thumbnail = new Image
         {
@@ -484,13 +499,61 @@ public sealed partial class AudiobookTile : UserControl
             UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
         });
 
-        // Tags text box - load current tags as comma-separated string
+        // Tags auto-suggest box - load current tags as comma-separated string
         var tagsText = TagsToCommaSeparatedString(audiobook.Model.Tags);
-        var tagsBox = new TextBox 
+        var tagsBox = new AutoSuggestBox 
         { 
             Header = "Tags (comma-separated)", 
             PlaceholderText = "e.g., fiction, mystery, thriller",
             Text = tagsText
+        };
+
+        // Handle text changes to provide suggestions
+        tagsBox.TextChanged += (s, args) =>
+        {
+            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+            {
+                var text = tagsBox.Text;
+                
+                // Get the text after the last comma (the current tag being typed)
+                var lastCommaIndex = text.LastIndexOf(',');
+                var currentTag = lastCommaIndex >= 0 
+                    ? text.Substring(lastCommaIndex + 1).Trim() 
+                    : text.Trim();
+
+                if (string.IsNullOrWhiteSpace(currentTag))
+                {
+                    tagsBox.ItemsSource = null;
+                    return;
+                }
+
+                // Filter existing tags that match the current input
+                var suggestions = tagSuggestions
+                    .Where(t => t.Contains(currentTag, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(t => t)
+                    .ToList();
+
+                tagsBox.ItemsSource = suggestions;
+            }
+        };
+
+        // Handle suggestion chosen
+        tagsBox.SuggestionChosen += (s, args) =>
+        {
+            var text = tagsBox.Text;
+            var lastCommaIndex = text.LastIndexOf(',');
+            
+            if (lastCommaIndex >= 0)
+            {
+                // Replace the current tag being typed with the chosen suggestion
+                var prefix = text.Substring(0, lastCommaIndex + 1).TrimEnd();
+                tagsBox.Text = prefix + " " + args.SelectedItem.ToString();
+            }
+            else
+            {
+                // No comma, just replace the entire text
+                tagsBox.Text = args.SelectedItem.ToString();
+            }
         };
 
         var descBox = new TextBox { Header = "Description", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
@@ -518,7 +581,7 @@ public sealed partial class AudiobookTile : UserControl
         {
             Spacing = 12,
             Padding = new Thickness(12),
-            MinWidth = 400  // Add MinWidth here to ensure content is at least 400px wide
+            MinWidth = 400
         };
         panel.Children.Add(grid);
         panel.Children.Add(tagsBox);
@@ -559,8 +622,13 @@ public sealed partial class AudiobookTile : UserControl
 
             // Mark the audiobook as modified so SaveAsync will actually save
             audiobook.IsModified = true;
+            
             // Persist
             await audiobook.SaveAsync();
+            
+            // Clean up orphaned tags (tags with no audiobooks)
+            await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
+            
             audiobook.RefreshCoverImage();
 
             // Refresh Library view so updated metadata appears

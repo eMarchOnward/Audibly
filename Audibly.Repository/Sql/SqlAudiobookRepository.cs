@@ -353,5 +353,19 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
             .ToListAsync();
     }
 
+    public async Task DeleteOrphanedTagsAsync()
+    {
+        var orphanedTags = await db.Tags
+            .Include(t => t.Audiobooks)
+            .Where(t => t.Audiobooks.Count == 0)
+            .ToListAsync();
+
+        if (orphanedTags.Count > 0)
+        {
+            db.Tags.RemoveRange(orphanedTags);
+            await db.SaveChangesAsync();
+        }
+    }
+
     #endregion
 }

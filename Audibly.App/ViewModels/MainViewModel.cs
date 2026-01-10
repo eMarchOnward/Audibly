@@ -1600,7 +1600,7 @@ public class Notification
 {
     public string Message { get; init; }
     public InfoBarSeverity Severity { get; init; }
-    public TimeSpan Duration { get; } = TimeSpan.FromSeconds(20);
+    public TimeSpan Duration { get; } = TimeSpan.FromSeconds(3);
 }
 
 public class AudiobookTileSize

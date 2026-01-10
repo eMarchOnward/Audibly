@@ -134,7 +134,7 @@
                 </toolkit:SettingsExpander>
 
                 <!--  Hotkeys  -->
-                <toolkit:SettingsExpander Description="Keyboard shortcuts for controlling playback" Header="Hotkeys">
+                <toolkit:SettingsExpander Description="Keyboard shortcuts" Header="Hotkeys">
                     <toolkit:SettingsExpander.HeaderIcon>
                         <FontIcon Glyph="&#xE765;" />
                     </toolkit:SettingsExpander.HeaderIcon>
@@ -161,6 +161,12 @@
                             <TextBlock 
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Text="When the mini player is pinned global hotkeys are available. Just hold ctrl modifier." 
+                                VerticalAlignment="Center" />
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard Header="Edit info">
+                            <TextBlock 
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="In the library view, if you click an audiobook while holding ctrl it will open the Edit Info dialog." 
                                 VerticalAlignment="Center" />
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
