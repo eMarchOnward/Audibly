@@ -560,4 +560,133 @@ public sealed partial class LibraryCardPage : Page
     {
         await FilterAudiobookList();
     }
+
+    #region Search functionality
+
+    private void AudiobookSearchBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (AudiobookSearchBox == null) return;
+        AudiobookSearchBox.QuerySubmitted += AudiobookSearchBox_QuerySubmitted;
+        AudiobookSearchBox.TextChanged += AudiobookSearchBox_TextChanged;
+    }
+
+    /// <summary>
+    ///     Filters or resets the audiobook list based on the search text.
+    /// </summary>
+    private async void AudiobookSearchBox_QuerySubmitted(AutoSuggestBox sender,
+        AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        if (string.IsNullOrEmpty(args.QueryText))
+            await ViewModel.ResetAudiobookListAsync();
+        else
+            await FilterAudiobookListBySearch(args.QueryText);
+    }
+
+    private List<AudiobookViewModel> GetFilteredAudiobooksBySearch(string text)
+    {
+        var parameters = text.Split([' '],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var matches = ViewModel.Audiobooks
+            .Select(audiobook => new
+            {
+                Audiobook = audiobook,
+                Score = parameters.Count(parameter =>
+                    audiobook.Author.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
+                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(audiobook.Description) &&
+                     audiobook.Description.Contains(parameter, StringComparison.OrdinalIgnoreCase)))
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Audiobook)
+            .ToList();
+
+        var exactMatches = matches.Where(audiobook =>
+            audiobook.Author.Equals(text, StringComparison.OrdinalIgnoreCase) ||
+            audiobook.Title.Equals(text, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(audiobook.Description) &&
+             audiobook.Description.Equals(text, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        return exactMatches.Count != 0 ? exactMatches : matches;
+    }
+
+    /// <summary>
+    ///     Filters the audiobook list based on the search text.
+    /// </summary>
+    private async Task FilterAudiobookListBySearch(string text)
+    {
+        var matches = GetFilteredAudiobooksBySearch(text);
+
+        await _dispatcherQueue.EnqueueAsync(() =>
+        {
+            ViewModel.Audiobooks.Clear();
+            foreach (var match in matches) ViewModel.Audiobooks.Add(match);
+        });
+    }
+
+    /// <summary>
+    ///     Updates the search box items source when the user changes the search text.
+    /// </summary>
+    private async void AudiobookSearchBox_TextChanged(AutoSuggestBox sender,
+        AutoSuggestBoxTextChangedEventArgs args)
+    {
+        // We only want to get results when it was a user typing,
+        // otherwise we assume the value got filled in by TextMemberPath
+        // or the handler for SuggestionChosen.
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            // If no search query is entered, refresh the complete list.
+            if (string.IsNullOrEmpty(sender.Text))
+            {
+                await _dispatcherQueue.EnqueueAsync(async () =>
+                    await ViewModel.GetAudiobookListAsync());
+                sender.ItemsSource = null;
+            }
+            else
+            {
+                sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
+                await FilterAudiobookListBySearch(sender.Text);
+            }
+        }
+    }
+
+    private List<string> GetAudiobookTitles(string text)
+    {
+        var parameters = text.Split([' '],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        return ViewModel.Audiobooks
+            .Select(audiobook => new
+            {
+                audiobook.Title,
+                Score = parameters.Count(parameter =>
+                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase))
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Title)
+            .ToList();
+    }
+
+    private List<string> GetAudiobookAuthors(string text)
+    {
+        var parameters = text.Split([' '],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        return ViewModel.Audiobooks
+            .Select(audiobook => new
+            {
+                audiobook.Author,
+                Score = parameters.Count(parameter =>
+                    audiobook.Author.Contains(parameter, StringComparison.OrdinalIgnoreCase))
+            })
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .Select(x => x.Author)
+            .Distinct()
+            .ToList();
+    }
+
+    #endregion
 }

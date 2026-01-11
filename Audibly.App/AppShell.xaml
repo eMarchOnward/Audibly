@@ -156,14 +156,6 @@
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
 
-            <NavigationView.AutoSuggestBox>
-                <AutoSuggestBox
-                    x:Name="AudiobookSearchBox"
-                    AutomationProperties.Name="AudiobookSearchBox"
-                    Loaded="AudiobookSearchBox_Loaded"
-                    QueryIcon="Find" />
-            </NavigationView.AutoSuggestBox>
-
             <muxc:NavigationView.PaneFooter>
                 <StackPanel>
                     <muxc:NavigationViewItem

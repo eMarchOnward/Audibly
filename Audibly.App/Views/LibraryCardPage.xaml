@@ -95,38 +95,35 @@
 
         <!--  title and command bar  -->
         <StackPanel
-            HorizontalAlignment="Left"
+            HorizontalAlignment="Stretch"
             Orientation="Vertical"
+            RelativePanel.AlignLeftWithPanel="True"
+            RelativePanel.AlignRightWithPanel="True"
             x:Name="TitleAndCommandBarPanel">
             <TextBlock
                 Margin="20,8,6,0"
                 Style="{StaticResource PageTitleTextBlockStyle}"
                 Text="Audiobook Library"
                 x:Name="PageTitle" />
-            <StackPanel
-                Margin="4,0,0,0"
-                Orientation="Horizontal"
-                RelativePanel.LeftOf="AudiobookSearchBox"
-                RelativePanel.RightOf="PageTitle">
+            
+            <Grid Margin="4,0,0,0" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Left buttons -->
+                    <ColumnDefinition Width="*" />
+                    <!-- Elastic search -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- Right buttons -->
+                </Grid.ColumnDefinitions>
 
-                <!--  TODO: tokenizing search box  -->
-                <!--  <controls:TokenizingTextBox  -->
-                <!--  PlaceholderText="Search audiobooks"  -->
-                <!--  QueryIcon="Find"  -->
-                <!--  QuerySubmitted="AudiobookSearchBox_OnQuerySubmitted"  -->
-                <!--  x:Name="AudiobookSearchBox" />  -->
-
-                <CommandBar
-                    Background="Transparent"
-                    DefaultLabelPosition="Right"
-                    HorizontalAlignment="Left"
-                    x:Name="MainCommandBar">
+                <!-- Left-aligned buttons -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="0">
                     <AppBarButton
                         Icon="Filter"
                         Label="Filter"
                         ToolTipService.ToolTip="Filter Audiobooks"
                         x:Name="FilterButton">
-                        <Button.Flyout>
+                        <AppBarButton.Flyout>
                             <!--  create custom filter checkbox flyout  -->
                             <Flyout Placement="BottomEdgeAlignedLeft">
                                 <StackPanel Orientation="Vertical">
@@ -157,10 +154,10 @@
                                         x:Name="CompletedFilterCheckBox" />
                                 </StackPanel>
                             </Flyout>
-                        </Button.Flyout>
+                        </AppBarButton.Flyout>
                     </AppBarButton>
 
-                    <!-- new Sort button -->
+                    <!-- Sort button -->
                     <AppBarButton
                         Icon="Sort"
                         Label="Sort"
@@ -190,7 +187,26 @@
                         Icon="Refresh"
                         Label="Refresh"
                         ToolTipService.ToolTip="Refresh audiobooks" />
+
                     <AppBarSeparator />
+                </StackPanel>
+
+                <!-- Elastic search box -->
+                <AutoSuggestBox
+                    Grid.Column="1"
+                    x:Name="AudiobookSearchBox"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Margin="8,0,8,0"
+                    MinWidth="200"
+                    PlaceholderText="Search"
+                    QueryIcon="Find"
+                    Loaded="AudiobookSearchBox_Loaded" />
+
+                <!-- Right-aligned buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">
+                    <AppBarSeparator />
+
                     <AppBarButton
                         Icon="Download"
                         Label="Import"
@@ -220,6 +236,7 @@
                             </MenuFlyout>
                         </AppBarButton.Flyout>
                     </AppBarButton>
+
                     <AppBarButton Label="Export" ToolTipService.ToolTip="Export audiobooks">
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xEDE1;" />
                         <AppBarButton.Flyout>
@@ -232,9 +249,9 @@
                             </MenuFlyout>
                         </AppBarButton.Flyout>
                     </AppBarButton>
+
                     <AppBarSeparator />
 
-                    <!--  zoom drop down button  -->
                     <AppBarButton
                         Icon="Zoom"
                         Label="Zoom"
@@ -348,8 +365,8 @@
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xEBE8;" />
                     </AppBarButton>
                     <!--  endregion: debug menu  -->
-                </CommandBar>
-            </StackPanel>
+                </StackPanel>
+            </Grid>
         </StackPanel>
 
         <!--  library card view  -->
