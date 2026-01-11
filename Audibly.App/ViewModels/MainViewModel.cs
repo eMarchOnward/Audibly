@@ -335,11 +335,18 @@ public class MainViewModel : BindableBase
             AudiobooksForFilter.Sort(comparison);
 
             // update the observable collection used by the UI
-            // Use TryEnqueue to update UI collection on the dispatcher without blocking
+            // CHANGED: Sort the currently displayed audiobooks in-place instead of replacing with all audiobooks
             _dispatcherQueue.TryEnqueue(() =>
             {
+                // Get the current displayed audiobooks
+                var currentAudiobooks = Audiobooks.ToList();
+                
+                // Sort them using the same comparison
+                currentAudiobooks.Sort(comparison);
+                
+                // Clear and repopulate with the sorted filtered list
                 Audiobooks.Clear();
-                foreach (var a in AudiobooksForFilter) Audiobooks.Add(a);
+                foreach (var a in currentAudiobooks) Audiobooks.Add(a);
             });
         }
         catch (Exception ex)

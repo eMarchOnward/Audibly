@@ -60,7 +60,7 @@
             IsSettingsVisible="True"
             IsTitleBarAutoPaddingEnabled="True"
             ItemInvoked="NavigationView_ItemInvoked"
-            OpenPaneLength="220"
+            OpenPaneLength="190"
             Visibility="{x:Bind ViewModel.IsNavigationViewVisible, Mode=OneWay}">
 
             <muxc:NavigationView.MenuItems>
@@ -115,7 +115,6 @@
                                         ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
                                         SelectionMode="Extended"
                                         SelectionChanged="TagsListView_SelectionChanged"
-                                        MaxHeight="450"
                                         Margin="0">
                                         <ListView.ItemContainerStyle>
                                             <Style TargetType="ListViewItem">

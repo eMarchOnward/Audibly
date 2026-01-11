@@ -195,7 +195,7 @@ public sealed partial class AppShell : Page
         if (AudiobookSearchBox == null) return;
         AudiobookSearchBox.QuerySubmitted += AudiobookSearchBox_QuerySubmitted;
         AudiobookSearchBox.TextChanged += AudiobookSearchBox_TextChanged;
-        AudiobookSearchBox.PlaceholderText = "Search audiobooks...";
+        AudiobookSearchBox.PlaceholderText = "Search";
     }
 
     // TODO: there's a bug when backspacing search text, it doesn't reset the list
