@@ -148,6 +148,10 @@ public sealed partial class AppShell : Page
         }
         else if (item == NowPlayingMenuItem)
         {
+            // Clear tag filters when navigating to Now Playing view
+            ViewModel.SelectedTags.Clear();
+            TagsListView?.SelectedItems.Clear();
+            
             App.RootFrame?.Navigate(typeof(PlayerPage));
             PlayerViewModel.IsPlayerFullScreen = true;
             PlayerViewModel.MaximizeMinimizeGlyph = Constants.MinimizeGlyph;

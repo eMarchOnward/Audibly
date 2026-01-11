@@ -148,6 +148,16 @@ public sealed partial class PlayerControlGrid : UserControl
     {
         if (!PlayerViewModel.IsPlayerFullScreen)
         {
+            // Clear tag filters when maximizing to Now Playing view
+            ViewModel.SelectedTags.Clear();
+            
+            // Find the AppShell and clear its TagsListView selection
+            if (App.Window?.Content is Frame rootFrame && rootFrame.Content is AppShell appShell)
+            {
+                var tagsListView = FindTagsListView(appShell);
+                tagsListView?.SelectedItems.Clear();
+            }
+
             PlayerViewModel.IsPlayerFullScreen = true;
             PlayerViewModel.MaximizeMinimizeGlyph = Constants.MinimizeGlyph;
             PlayerViewModel.MaximizeMinimizeTooltip = Constants.MinimizeTooltip;
@@ -166,6 +176,28 @@ public sealed partial class PlayerControlGrid : UserControl
                 App.RootFrame?.Navigate(typeof(AppShell));
             // App.Window.RestoreWindow();
         }
+    }
+
+    /// <summary>
+    ///     Helper method to find the TagsListView in the AppShell's visual tree.
+    /// </summary>
+    private static ListView? FindTagsListView(DependencyObject root)
+    {
+        if (root == null) return null;
+
+        // Recursively search the visual tree for a ListView named "TagsListView"
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            
+            if (child is ListView listView && (child as FrameworkElement)?.Name == "TagsListView")
+                return listView;
+
+            var result = FindTagsListView(child);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
