@@ -16,6 +16,7 @@ using CommunityToolkit.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Constants = Audibly.App.Helpers.Constants;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
@@ -340,8 +341,56 @@ public sealed partial class AppShell : Page
             ViewModel.SelectedTags.Add(tag);
         }
 
+        // Update visual indicators for selected items
+        UpdateTagSelectionIndicators(listView);
+
         // Notify that selected tags have changed
         ViewModel.NotifySelectedTagsChanged();
+    }
+
+    /// <summary>
+    ///     Updates the visual selection indicators for all tag items.
+    /// </summary>
+    private void UpdateTagSelectionIndicators(ListView listView)
+    {
+        // Iterate through all containers in the ListView
+        for (int i = 0; i < listView.Items.Count; i++)
+        {
+            var container = listView.ContainerFromIndex(i) as ListViewItem;
+            if (container == null) continue;
+
+            // Find the SelectionIndicator Border in the DataTemplate
+            var grid = FindChild<Grid>(container);
+            var indicator = grid?.FindName("SelectionIndicator") as Border;
+            
+            if (indicator != null)
+            {
+                // Show indicator if this item is selected
+                indicator.Visibility = listView.SelectedItems.Contains(listView.Items[i]) 
+                    ? Visibility.Visible 
+                    : Visibility.Collapsed;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Helper method to find a child element of a specific type in the visual tree.
+    /// </summary>
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        if (parent == null) return null;
+
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typedChild)
+                return typedChild;
+
+            var result = FindChild<T>(child);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     private async void ClearTagsLink_Tapped(object sender, RoutedEventArgs e)

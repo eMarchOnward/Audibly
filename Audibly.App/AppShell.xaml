@@ -120,12 +120,32 @@
                                             <Style TargetType="ListViewItem">
                                                 <!-- remove left padding that ListViewItems normally have -->
                                                 <Setter Property="Padding" Value="0"/>
-                                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                <Setter Property="MinHeight" Value="32"/>
                                             </Style>
                                         </ListView.ItemContainerStyle>
                                         <ListView.ItemTemplate>
                                             <DataTemplate x:DataType="models:Tag">
-                                                <TextBlock Text="{x:Bind Name}" Margin="10,4,0,4" />
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="3"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    
+                                                    <!-- Selection indicator bar -->
+                                                    <Border 
+                                                        Grid.Column="0"
+                                                        Background="{ThemeResource SystemAccentColor}"
+                                                        Visibility="Collapsed"
+                                                        x:Name="SelectionIndicator"/>
+                                                    
+                                                    <!-- Tag name -->
+                                                    <TextBlock 
+                                                        Grid.Column="1"
+                                                        Text="{x:Bind Name}" 
+                                                        Margin="10,4,0,4"
+                                                        VerticalAlignment="Center"/>
+                                                </Grid>
                                             </DataTemplate>
                                         </ListView.ItemTemplate>
                                     </ListView>
