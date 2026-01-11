@@ -168,7 +168,7 @@ public sealed partial class LibraryCardPage : Page
             // Check progress filters
             if (hasProgressFilter)
             {
-                if (_activeFilters.Contains(AudioBookFilter.InProgress) && audiobook.Progress > 0 && !audiobook.IsCompleted)
+                if (_activeFilters.Contains(AudioBookFilter.InProgress) && audiobook.Progress > 2 && !audiobook.IsCompleted)
                     matchesProgressFilter = true;
                 if (_activeFilters.Contains(AudioBookFilter.NotStarted) && audiobook.Progress == 0 && !audiobook.IsCompleted)
                     matchesProgressFilter = true;

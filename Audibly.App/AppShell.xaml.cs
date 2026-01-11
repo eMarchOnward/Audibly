@@ -228,7 +228,9 @@ public sealed partial class AppShell : Page
                 Audiobook = audiobook,
                 Score = parameters.Count(parameter =>
                     audiobook.Author.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
-                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase))
+                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(audiobook.Description) && 
+                 audiobook.Description.Contains(parameter, StringComparison.OrdinalIgnoreCase)))
             })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -237,7 +239,9 @@ public sealed partial class AppShell : Page
 
         var exactMatches = matches.Where(audiobook =>
             audiobook.Author.Equals(text, StringComparison.OrdinalIgnoreCase) ||
-            audiobook.Title.Equals(text, StringComparison.OrdinalIgnoreCase)).ToList();
+            audiobook.Title.Equals(text, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(audiobook.Description) && 
+         audiobook.Description.Equals(text, StringComparison.OrdinalIgnoreCase))).ToList();
 
         return exactMatches.Count != 0 ? exactMatches : matches;
     }
