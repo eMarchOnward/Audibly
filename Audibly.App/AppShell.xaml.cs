@@ -70,6 +70,9 @@ public sealed partial class AppShell : Page
 
         NavView.PaneClosed += (_, _) => { UserSettings.IsSidebarCollapsed = true; };
         NavView.PaneOpened += (_, _) => { UserSettings.IsSidebarCollapsed = false; };
+
+        // Subscribe to clear tag selection event
+        ViewModel.ClearTagSelection += ViewModelOnClearTagSelection;
     }
 
     /// <summary>
@@ -277,10 +280,23 @@ public sealed partial class AppShell : Page
         // Clear visual selection in the ListView (if it's instantiated)
         TagsListView?.SelectedItems.Clear();
 
+        // Notify listeners that search text should be cleared
+        ViewModel.NotifyClearSearchText();
+
         // Notify listeners (LibraryCardPage listens for this and will refilter)
         ViewModel.NotifySelectedTagsChanged();
 
         // Optional: explicitly reload the full audiobook list (ensures AvailableTags/data are fresh)
         await ViewModel.GetAudiobookListAsync();
+    }
+
+    private void ViewModelOnClearTagSelection()
+    {
+        // Clear visual selection in the ListView and update indicators
+        if (TagsListView != null)
+        {
+            TagsListView.SelectedItems.Clear();
+            UpdateTagSelectionIndicators(TagsListView);
+        }
     }
 }

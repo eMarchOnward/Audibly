@@ -64,6 +64,7 @@ public sealed partial class LibraryCardPage : Page
         Unloaded += LibraryCardPage_Unloaded;
         ViewModel.ResetFilters += ViewModelOnResetFilters;
         ViewModel.SelectedTagsChanged += ViewModelOnSelectedTagsChanged;
+        ViewModel.ClearSearchText += ViewModelOnClearSearchText;
         // keep sort UI in sync with ViewModel and persisted settings
         ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
 
@@ -554,6 +555,7 @@ public sealed partial class LibraryCardPage : Page
     private void LibraryCardPage_Unloaded(object sender, RoutedEventArgs e)
     {
         ViewModel.SelectedTagsChanged -= ViewModelOnSelectedTagsChanged;
+        ViewModel.ClearSearchText -= ViewModelOnClearSearchText;
     }
 
     private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
@@ -577,9 +579,57 @@ public sealed partial class LibraryCardPage : Page
         AutoSuggestBoxQuerySubmittedEventArgs args)
     {
         if (string.IsNullOrEmpty(args.QueryText))
-            await ViewModel.ResetAudiobookListAsync();
+        {
+            await ClearSearchAndTagFilters();
+        }
         else
+        {
             await FilterAudiobookListBySearch(args.QueryText);
+        }
+    }
+
+    /// <summary>
+    ///     Updates the search box items source when the user changes the search text.
+    /// </summary>
+    private async void AudiobookSearchBox_TextChanged(AutoSuggestBox sender,
+        AutoSuggestBoxTextChangedEventArgs args)
+    {
+        // We only want to get results when it was a user typing,
+        // otherwise we assume the value got filled in by TextMemberPath
+        // or the handler for SuggestionChosen.
+        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            // If no search query is entered, refresh the complete list.
+            if (string.IsNullOrEmpty(sender.Text))
+            {
+                await ClearSearchAndTagFilters();
+                sender.ItemsSource = null;
+            }
+            else
+            {
+                sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
+                await FilterAudiobookListBySearch(sender.Text);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Clears the search text and all tag filters, then reloads the full audiobook list.
+    /// </summary>
+    private async Task ClearSearchAndTagFilters()
+    {
+        // Clear tag filters in the ViewModel
+        ViewModel.SelectedTags.Clear();
+        
+        // Clear tag selection UI in AppShell
+        ViewModel.NotifyClearTagSelection();
+        
+        // Notify that selected tags have changed so filtering updates
+        ViewModel.NotifySelectedTagsChanged();
+        
+        // Reload the full audiobook list
+        await _dispatcherQueue.EnqueueAsync(async () =>
+            await ViewModel.GetAudiobookListAsync());
     }
 
     private List<AudiobookViewModel> GetFilteredAudiobooksBySearch(string text)
@@ -625,37 +675,11 @@ public sealed partial class LibraryCardPage : Page
         });
     }
 
-    /// <summary>
-    ///     Updates the search box items source when the user changes the search text.
-    /// </summary>
-    private async void AudiobookSearchBox_TextChanged(AutoSuggestBox sender,
-        AutoSuggestBoxTextChangedEventArgs args)
-    {
-        // We only want to get results when it was a user typing,
-        // otherwise we assume the value got filled in by TextMemberPath
-        // or the handler for SuggestionChosen.
-        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
-        {
-            // If no search query is entered, refresh the complete list.
-            if (string.IsNullOrEmpty(sender.Text))
-            {
-                await _dispatcherQueue.EnqueueAsync(async () =>
-                    await ViewModel.GetAudiobookListAsync());
-                sender.ItemsSource = null;
-            }
-            else
-            {
-                sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
-                await FilterAudiobookListBySearch(sender.Text);
-            }
-        }
-    }
-
     private List<string> GetAudiobookTitles(string text)
     {
         var parameters = text.Split([' '],
             StringSplitOptions.RemoveEmptyEntries);
-
+        var titles = new List<string>();
         return ViewModel.Audiobooks
             .Select(audiobook => new
             {
@@ -686,6 +710,14 @@ public sealed partial class LibraryCardPage : Page
             .Select(x => x.Author)
             .Distinct()
             .ToList();
+    }
+
+    private void ViewModelOnClearSearchText()
+    {
+        if (AudiobookSearchBox != null)
+        {
+            AudiobookSearchBox.Text = string.Empty;
+        }
     }
 
     #endregion

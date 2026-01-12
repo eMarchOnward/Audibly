@@ -43,6 +43,8 @@ public class MainViewModel : BindableBase
     #region Delegates
 
     public delegate void ResetFiltersHandler();
+    public delegate void ClearSearchTextHandler();
+    public delegate void ClearTagSelectionHandler();
 
     #endregion
 
@@ -133,6 +135,16 @@ public class MainViewModel : BindableBase
     ///     Event raised when selected tags change.
     /// </summary>
     public event EventHandler? SelectedTagsChanged;
+
+    /// <summary>
+    ///     Event raised when the search text should be cleared.
+    /// </summary>
+    public event ClearSearchTextHandler? ClearSearchText;
+
+    /// <summary>
+    ///     Event raised when tag selections should be cleared in the UI.
+    /// </summary>
+    public event ClearTagSelectionHandler? ClearTagSelection;
 
     /// <summary>
     ///     Gets or sets the selected audiobook, or null if no audiobook is selected.
@@ -528,6 +540,14 @@ public class MainViewModel : BindableBase
     public void NotifySelectedTagsChanged()
     {
         SelectedTagsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    ///     Raises the ClearTagSelection event to clear tag UI selections.
+    /// </summary>
+    public void NotifyClearTagSelection()
+    {
+        ClearTagSelection?.Invoke();
     }
 
     /// <summary>
@@ -1601,6 +1621,14 @@ public class MainViewModel : BindableBase
         LoggingService.Log($"Imported {totalBooks} Audiobooks from folder in {stopwatch.Elapsed} seconds.");
     }
     #endregion
+
+    /// <summary>
+    ///     Notifies listeners that the search text should be cleared.
+    /// </summary>
+    public void NotifyClearSearchText()
+    {
+        ClearSearchText?.Invoke();
+    }
 }
 
 public class Notification
