@@ -60,7 +60,7 @@
             IsSettingsVisible="True"
             IsTitleBarAutoPaddingEnabled="True"
             ItemInvoked="NavigationView_ItemInvoked"
-            OpenPaneLength="190"
+            OpenPaneLength="210"
             Visibility="{x:Bind ViewModel.IsNavigationViewVisible, Mode=OneWay}">
 
             <muxc:NavigationView.MenuItems>
@@ -94,14 +94,15 @@
                     <!-- reduce indentation of children so they align with the 'Tags' label -->
                     <muxc:NavigationViewItem.MenuItems>
                         <!-- Remove the built-in padding of this child NavigationViewItem and shift its content left -->
-                        <muxc:NavigationViewItem SelectsOnInvoked="False" Padding="0" Margin="0">
+                        <muxc:NavigationViewItem SelectsOnInvoked="False" Padding="0" Margin="0"
+                                                 HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
                             <muxc:NavigationViewItem.Content>
                                 <!-- Negative left margin offsets the nav submenu indent so child content lines up with the parent label -->
-                                <StackPanel Margin="-12,0,0,0">
+                                <StackPanel Margin="-20,0,-20,0" HorizontalAlignment="Stretch">
                                     <!-- Show all link (left aligned and styled like tag rows) -->
                                     <HyperlinkButton
                                         x:Name="ClearTagsLink"
-                                        Margin="7,4,0,6"
+                                        Margin="10,4,0,6"
                                         Padding="3"
                                         HorizontalAlignment="Left"
                                         IsHitTestVisible="True"
@@ -115,18 +116,24 @@
                                         ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
                                         SelectionMode="Extended"
                                         SelectionChanged="TagsListView_SelectionChanged"
-                                        Margin="0">
+                                        ScrollViewer.VerticalScrollMode="Disabled"
+                                        ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                        Margin="0"
+                                        Padding="0"
+                                        BorderThickness="0"
+                                        HorizontalAlignment="Stretch">
                                         <ListView.ItemContainerStyle>
                                             <Style TargetType="ListViewItem">
                                                 <!-- remove left padding that ListViewItems normally have -->
                                                 <Setter Property="Padding" Value="0"/>
                                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                                                 <Setter Property="MinHeight" Value="32"/>
+                                                <Setter Property="Margin" Value="0"/>
                                             </Style>
                                         </ListView.ItemContainerStyle>
                                         <ListView.ItemTemplate>
                                             <DataTemplate x:DataType="models:Tag">
-                                                <Grid>
+                                                <Grid HorizontalAlignment="Stretch">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="3"/>
                                                         <ColumnDefinition Width="*"/>
@@ -144,7 +151,9 @@
                                                         Grid.Column="1"
                                                         Text="{x:Bind Name}" 
                                                         Margin="10,4,0,4"
-                                                        VerticalAlignment="Center"/>
+                                                        VerticalAlignment="Center"
+                                                        TextWrapping="Wrap"
+                                                        TextTrimming="CharacterEllipsis"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ListView.ItemTemplate>
