@@ -266,6 +266,53 @@ public class PlayerViewModel : BindableBase, IDisposable
         // UpdatePlaybackSpeed(UserSettings.PlaybackSpeed);
     }
 
+    public async Task RewindIfNeededAsync()
+    {
+        if (NowPlaying == null || NowPlaying.DateLastPlayed == null)
+            return;
+
+        var timeSinceLastPlayed = DateTime.Now - NowPlaying.DateLastPlayed.Value;
+        
+        // Determine rewind amount based on time since last played
+        TimeSpan rewindAmount = TimeSpan.Zero;
+        if (timeSinceLastPlayed.TotalSeconds > 20 && timeSinceLastPlayed.TotalMinutes <= 5)
+        {
+            rewindAmount = TimeSpan.FromSeconds(2);
+        }
+        else if (timeSinceLastPlayed.TotalMinutes > 5)
+        {
+            rewindAmount = TimeSpan.FromSeconds(4);
+        }
+
+        // No rewind needed if time since last played is less than 20 seconds
+        if (rewindAmount == TimeSpan.Zero)
+            return;
+
+        var currentPos = CurrentPosition;
+        var chapterStart = NowPlaying.CurrentChapter != null 
+            ? TimeSpan.FromMilliseconds(NowPlaying.CurrentChapter.StartTime)
+            : TimeSpan.Zero;
+        var tolerance = TimeSpan.FromSeconds(1);
+
+        // Don't rewind if we're at the start of a chapter
+        if (currentPos <= chapterStart + tolerance)
+            return;
+
+        // Calculate new position, ensuring we don't go before chapter start or file start
+        var newPosition = currentPos - rewindAmount;
+        if (newPosition < chapterStart)
+            newPosition = chapterStart;
+        if (newPosition < TimeSpan.Zero)
+            newPosition = TimeSpan.Zero;
+
+        CurrentPosition = newPosition;
+
+        // Update progress and save
+        UpdateAudiobookProgress();
+        NowPlaying.RefreshProgress();
+        await NowPlaying.SaveAsync();
+    }
+
     public void SetTimer(double seconds)
     {
         // Cancel existing timer if active
@@ -450,23 +497,23 @@ public class PlayerViewModel : BindableBase, IDisposable
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
 
         // If the UI is sorted by last played, re-apply sort in the background without blocking playback
-        if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
-        {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    // Small delay to ensure DateLastPlayed has been saved
-                    await Task.Delay(380);
-                    App.ViewModel.ApplySort();
-                }
-                catch (Exception ex)
-                {
-                    // log but do not crash the player
-                    App.ViewModel.LoggingService.LogError(ex, true);
-                }
-            });
-        }
+        //if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
+        //{
+        //    _ = Task.Run(async () =>
+        //    {
+        //        try
+        //        {
+        //            // Small delay to ensure DateLastPlayed has been saved
+        //            await Task.Delay(380);
+        //            App.ViewModel.ApplySort();
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            // log but do not crash the player
+        //            App.ViewModel.LoggingService.LogError(ex, true);
+        //        }
+        //    });
+        //}
     }
 
     public void JumpToPosition(long positionMs)
@@ -679,33 +726,6 @@ public class PlayerViewModel : BindableBase, IDisposable
                 {
                     if (PlayPauseIcon == Symbol.Pause) return;
                     PlayPauseIcon = Symbol.Pause;
-
-                    // Record last-played time when playback starts and save in background
-                    if (NowPlaying != null)
-                    {
-                        NowPlaying.DateLastPlayed = DateTime.Now;
-                        NowPlaying.IsModified = true;
-
-                        // Save asynchronously in the background; reapply sort if necessary
-                        _ = Task.Run(async () =>
-                        {
-                            try
-                            {
-                                await NowPlaying.SaveAsync();
-
-                                if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
-                                {
-                                    // small delay to ensure UI/DB consistency (matches existing pattern)
-                                    await Task.Delay(380);
-                                    await _dispatcherQueue.EnqueueAsync(() => App.ViewModel.ApplySort());
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                App.ViewModel.LoggingService.LogError(ex, true);
-                            }
-                        });
-                    }
                 });
 
                 break;
@@ -721,6 +741,21 @@ public class PlayerViewModel : BindableBase, IDisposable
                     // On pause, update progress and flush any pending position changes
                     if (NowPlaying != null)
                     {
+                        NowPlaying.DateLastPlayed = DateTime.Now;
+                        NowPlaying.IsModified = true;
+
+                        // Save asynchronously in the background; reapply sort if necessary
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await NowPlaying.SaveAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                App.ViewModel.LoggingService.LogError(ex, true);
+                            }
+                        });
                         UpdateAudiobookProgress();
                         await TryPersistPositionAsync(NowPlaying);
                     }

@@ -53,10 +53,13 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         set => SetValue(PlayButtonSizeProperty, value);
     }
 
-    private void PlayPauseButton_OnClick(object sender, RoutedEventArgs e)
+    private async void PlayPauseButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (PlayerViewModel.PlayPauseIcon == Symbol.Play)
+        {
+            await PlayerViewModel.RewindIfNeededAsync();
             PlayerViewModel.MediaPlayer.Play();
+        }
         else
             PlayerViewModel.MediaPlayer.Pause();
     }

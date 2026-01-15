@@ -188,19 +188,19 @@ public sealed partial class AudiobookTile : UserControl
                 await PlayerViewModel.OpenAudiobook(audiobook);
                 //PlayerViewModel.MediaPlayer.Play();
             }
-            else
-            {
-                // Toggle play / pause when this audiobook is already loaded
-                if (PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState ==
-                    Windows.Media.Playback.MediaPlaybackState.Playing)
-                {
-                    PlayerViewModel.MediaPlayer.Pause();
-                }
-                else
-                {
-                    PlayerViewModel.MediaPlayer.Play();
-                }
-            }
+            //else
+            //{
+            //    // Toggle play / pause when this audiobook is already loaded
+            //    if (PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState ==
+            //        Windows.Media.Playback.MediaPlaybackState.Playing)
+            //    {
+            //        PlayerViewModel.MediaPlayer.Pause();
+            //    }
+            //    else
+            //    {
+            //        PlayerViewModel.MediaPlayer.Play();
+            //    }
+            //}
         });
     }
 
