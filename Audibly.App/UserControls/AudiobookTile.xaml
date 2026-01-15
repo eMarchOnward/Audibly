@@ -17,7 +17,7 @@
             Placement="RightEdgeAlignedTop"
             x:Name="MenuFlyout">
             <MenuFlyoutItem
-                Click="ButtonTile_Click"
+                Click="PlayAudiobook_OnClick"
                 Icon="Play"
                 Text="Play" />
             <MenuFlyoutItem
@@ -86,6 +86,7 @@
         PointerExited="AudiobookTile_OnPointerExited"
         RightTapped="ButtonTile_OnRightTapped"
         Click="ButtonTile_Click"
+        DoubleTapped="ButtonTile_OnDoubleTapped"
         x:Name="ButtonTile">
         <Grid RowSpacing="16" VerticalAlignment="Stretch">
 

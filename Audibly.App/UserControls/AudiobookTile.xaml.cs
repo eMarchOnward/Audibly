@@ -405,11 +405,9 @@ public sealed partial class AudiobookTile : UserControl
         // Trim leading/trailing spaces
         var normalized = tagName.Trim();
         
-        // Replace internal spaces with underscores
-        normalized = normalized.Replace(' ', '_');
-        
-        // Remove any non-alphanumeric characters except underscores and hyphens
-        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '-').ToArray());
+        // Remove any non-alphanumeric characters except spaces and hyphens
+        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) || 
+            c == ' ' || c == '-' || c == '|' || c == '/' || c == '_').ToArray());
         
         // Convert to lowercase for case-insensitive comparison
         return normalized.ToLowerInvariant();
@@ -425,7 +423,7 @@ public sealed partial class AudiobookTile : UserControl
 
         foreach (var tagName in tagNames)
         {
-            var displayName = tagName.Trim().Replace(' ', '_'); // Replace spaces with underscores for display
+            var displayName = tagName.Trim(); // Keep spaces in display name
             var normalizedName = NormalizeTagName(tagName);
             
             if (string.IsNullOrEmpty(normalizedName))
@@ -647,57 +645,55 @@ public sealed partial class AudiobookTile : UserControl
         }
     }
 
-    //private async void ButtonTile_PointerPressed(object sender, PointerRoutedEventArgs e)
-    //{
-    //    var now = DateTime.UtcNow;
-    //    var elapsed = now - _lastClickTime;
-    //    _lastClickTime = now;
+    private async void ButtonTile_OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
 
-    //    if (elapsed <= _doubleClickThreshold)
-    //    {
-    //        // Treat as double-click: suppress normal click
-    //        e.Handled = true;
-    //        _lastDoubleTap = DateTime.UtcNow;
+        e.Handled = true;
 
-    //        if (_isLoading)
-    //        {
-    //            return;
-    //        }
+        try
+        {
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                // Load the audiobook if it's not already loaded or if it's a different one
+                var currentAudiobook = PlayerViewModel.NowPlaying;
+                if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+                {
+                    await PlayerViewModel.OpenAudiobook(audiobook);
+                }
 
-    //        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
-    //        if (audiobook == null)
-    //        {
-    //            return;
-    //        }
+                // Start playing
+                PlayerViewModel.MediaPlayer.Play();
+            });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.LoggingService.LogError(ex, true);
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "Failed to open/play audiobook.",
+                Severity = InfoBarSeverity.Error
+            });
+        }
+    }
+    private async void PlayAudiobook_OnClick(object sender, RoutedEventArgs e)
+    {
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
 
-    //        try
-    //        {
-    //            _isLoading = true;
-    //            await PlayerViewModel.OpenAudiobook(audiobook);
+        await _dispatcherQueue.EnqueueAsync(async () =>
+        {
+            var currentAudiobook = PlayerViewModel.NowPlaying;
 
-    //            await _dispatcherQueue.EnqueueAsync(() =>
-    //            {
-    //                if (PlayerViewModel.NowPlaying != null && PlayerViewModel.NowPlaying.Id == audiobook.Id)
-    //                {
-    //                    PlayerViewModel.MediaPlayer.Play();
-    //                }
+            // Load the audiobook if it's not already loaded or if it's a different one
+            if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+            {
+                await PlayerViewModel.OpenAudiobook(audiobook);
+            }
 
-    //                return Task.CompletedTask;
-    //            });
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            ViewModel.LoggingService.LogError(ex, true);
-    //            ViewModel.EnqueueNotification(new Notification
-    //            {
-    //                Message = "Failed to open/play audiobook.",
-    //                Severity = InfoBarSeverity.Error
-    //            });
-    //        }
-    //        finally
-    //        {
-    //            _isLoading = false;
-    //        }
-    //    }
-    //}
+            // Always start playing
+            PlayerViewModel.MediaPlayer.Play();
+        });
+    }
 }
