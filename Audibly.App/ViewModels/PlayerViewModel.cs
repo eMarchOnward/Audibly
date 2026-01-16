@@ -64,8 +64,13 @@ public class PlayerViewModel : BindableBase, IDisposable
     private bool _mediaEventsInitialized;
 
     private int _debugMediaEndedCount;
-    
+
     private bool _isSwitchingSourceFiles;
+    private bool _isOpeningAudiobook;
+
+    // Tracks if the current audiobook has actually been playing
+    private bool _hasBeenPlaying;
+    private AudiobookViewModel? _lastPlayingAudiobook;
 
     // Throttling fields for position updates
     private DateTime _lastPositionUiUpdate = DateTime.MinValue;
@@ -463,6 +468,9 @@ public class PlayerViewModel : BindableBase, IDisposable
             return;
         }
 
+        // Set flag to prevent PositionChanged from corrupting CurrentTimeMs during load
+        _isOpeningAudiobook = true;
+
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
             NowPlaying = audiobook;
@@ -481,13 +489,19 @@ public class PlayerViewModel : BindableBase, IDisposable
             NowPlaying.IsNowPlaying = true;
             //NowPlaying.DateLastPlayed = DateTime.Now;
 
+            // Ensure we have a valid source file index when opening
+            if (NowPlaying.CurrentSourceFileIndex < 0 || NowPlaying.CurrentSourceFileIndex >= NowPlaying.SourcePaths.Count)
+            {
+                NowPlaying.CurrentSourceFileIndex = 0;
+            }
+
             ChapterComboSelectedIndex = NowPlaying.CurrentChapterIndex ?? 0;
             NowPlaying.CurrentChapterTitle = NowPlaying.Chapters[ChapterComboSelectedIndex].Title;
 
             // Reset persistence tracking for the new audiobook
             _positionDirty = false;
             _lastPositionPersistTime = DateTime.UtcNow;
-            
+
             // Update progress once when opening
             UpdateAudiobookProgress();
             NowPlaying.RefreshProgress();
@@ -496,24 +510,6 @@ public class PlayerViewModel : BindableBase, IDisposable
 
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
 
-        // If the UI is sorted by last played, re-apply sort in the background without blocking playback
-        //if (App.ViewModel.CurrentSortMode == AudiobookSortMode.DateLastPlayed)
-        //{
-        //    _ = Task.Run(async () =>
-        //    {
-        //        try
-        //        {
-        //            // Small delay to ensure DateLastPlayed has been saved
-        //            await Task.Delay(380);
-        //            App.ViewModel.ApplySort();
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            // log but do not crash the player
-        //            App.ViewModel.LoggingService.LogError(ex, true);
-        //        }
-        //    });
-        //}
     }
 
     public void JumpToPosition(long positionMs)
@@ -638,8 +634,9 @@ public class PlayerViewModel : BindableBase, IDisposable
             // Set the MediaPlayer position to the calculated position within the current source file
             CurrentPosition = TimeSpan.FromMilliseconds(positionWithinSourceMs);
 
-            Debug.WriteLine($"[MediaOpened] Clearing _isSwitchingSourceFiles flag");
+            Debug.WriteLine($"[MediaOpened] Clearing _isSwitchingSourceFiles and _isOpeningAudiobook flags");
             _isSwitchingSourceFiles = false;
+            _isOpeningAudiobook = false;
 
             if (_pendingAutoPlay)
             {
@@ -726,6 +723,10 @@ public class PlayerViewModel : BindableBase, IDisposable
                 {
                     if (PlayPauseIcon == Symbol.Pause) return;
                     PlayPauseIcon = Symbol.Pause;
+
+                    // Mark that playback has actually started for the current audiobook
+                    _hasBeenPlaying = true;
+                    _lastPlayingAudiobook = NowPlaying; // remember which book actually played
                 });
 
                 break;
@@ -738,26 +739,36 @@ public class PlayerViewModel : BindableBase, IDisposable
                         PlayPauseIcon = Symbol.Play;
                     }
 
-                    // On pause, update progress and flush any pending position changes
-                    if (NowPlaying != null)
+                    // Only treat this as a real stop if something has actually been playing
+                    var target = _hasBeenPlaying ? _lastPlayingAudiobook : null;
+                    if (target != null)
                     {
-                        NowPlaying.DateLastPlayed = DateTime.Now;
-                        NowPlaying.IsModified = true;
+                        target.DateLastPlayed = DateTime.Now;
+                        target.IsModified = true;
 
                         // Save asynchronously in the background; reapply sort if necessary
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                await NowPlaying.SaveAsync();
+                                await target.SaveAsync();
                             }
                             catch (Exception ex)
                             {
                                 App.ViewModel.LoggingService.LogError(ex, true);
                             }
                         });
-                        UpdateAudiobookProgress();
-                        await TryPersistPositionAsync(NowPlaying);
+
+                        // If the stopped book is still the current one, update progress and persist position
+                        if (NowPlaying == target)
+                        {
+                            UpdateAudiobookProgress();
+                            await TryPersistPositionAsync(target);
+                        }
+
+                        // Reset flags so future Paused events without playback do not update timestamps
+                        _hasBeenPlaying = false;
+                        _lastPlayingAudiobook = null;
                     }
                 });
 
@@ -767,7 +778,7 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private async void PlaybackSession_PositionChanged(MediaPlaybackSession sender, object args)
     {
-        if (NowPlaying == null || _isSwitchingSourceFiles) return;
+        if (NowPlaying == null || _isSwitchingSourceFiles || _isOpeningAudiobook) return;
 
         var currentNowPlaying = NowPlaying;
         var currentPositionMs = CurrentPosition.TotalMilliseconds; // Capture early on the correct thread
