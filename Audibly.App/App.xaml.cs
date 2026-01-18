@@ -1,5 +1,5 @@
 ﻿// Author: rstewa · https://github.com/rstewa
-// Updated: 07/30/2025
+// Updated: 01/18/2026
 
 using System;
 using System.Collections.Generic;
@@ -33,12 +33,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Microsoft.Windows.AppLifecycle;
-using Sentry;
 using WinRT.Interop;
 using Constants = Audibly.App.Helpers.Constants;
 using UnhandledExceptionEventArgs = Microsoft.UI.Xaml.UnhandledExceptionEventArgs;
 using DispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue;
 using LaunchActivatedEventArgs = Microsoft.UI.Xaml.LaunchActivatedEventArgs;
+using System.Threading.Tasks;
 
 namespace Audibly.App;
 
@@ -48,7 +48,8 @@ namespace Audibly.App;
 public partial class App : Application
 {
     private static Win32WindowHelper win32WindowHelper;
-    private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    // Move this to constructor instead of field initializer
+    private DispatcherQueue? _dispatcherQueue;
 
     /// <summary>
     ///     Initializes the singleton application object.  This is the first line of authored code
@@ -56,18 +57,15 @@ public partial class App : Application
     /// </summary>
     public App()
     {
-        SentrySdk.Init(options =>
-        {
-            options.Dsn = Helpers.Sentry.Dsn;
-            options.AutoSessionTracking = true;
-            options.SampleRate = 0.25f;
-            options.TracesSampleRate = 0.25;
-            options.IsGlobalModeEnabled = true;
-            options.ProfilesSampleRate = 0.25;
-            options.Environment = "production";
-        });
-
+        // Initialize here after COM wrappers are initialized
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        
+        // Register global exception handlers
         UnhandledException += OnUnhandledException;
+        
+        // Also catch unhandled exceptions from async void methods
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+        
         InitializeComponent();
     }
 
@@ -100,7 +98,39 @@ public partial class App : Application
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        ViewModel.LoggingService.LogError(e.Exception, true);
+        // Prevent the app from crashing
+        e.Handled = true;
+        
+        try
+        {
+            ViewModel.LoggingService.LogError(e.Exception, includeStackTrace: true);
+            
+            // Optionally show a user-friendly message
+            System.Diagnostics.Debug.WriteLine($"Unhandled exception: {e.Exception.Message}");
+        }
+        catch (Exception loggingEx)
+        {
+            // Last resort: write to debug output if logging fails
+            System.Diagnostics.Debug.WriteLine($"Failed to log exception: {e.Exception}");
+            System.Diagnostics.Debug.WriteLine($"Logging error: {loggingEx}");
+        }
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        // Prevent the app from crashing
+        e.SetObserved();
+        
+        try
+        {
+            ViewModel.LoggingService.LogError(e.Exception, includeStackTrace: true);
+            System.Diagnostics.Debug.WriteLine($"Unobserved task exception: {e.Exception.Message}");
+        }
+        catch (Exception loggingEx)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to log unobserved task exception: {e.Exception}");
+            System.Diagnostics.Debug.WriteLine($"Logging error: {loggingEx}");
+        }
     }
 
     /// <summary>
@@ -109,6 +139,9 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Log app startup
+        ViewModel.LoggingService.Log("=== Application Starting ===");
+        
         // If this is the first instance launched, then register it as the "main" instance.
         // If this isn't the first instance launched, then "main" will already be registered,
         // so retrieve it.
@@ -141,6 +174,8 @@ public partial class App : Application
             if (PlayerViewModel.NowPlaying != null) await PlayerViewModel.NowPlaying.SaveAsync();
             PlayerViewModel.Dispose();
             WindowHelper.CloseAll();
+            
+            ViewModel.LoggingService.Log("=== Application Closing ===");
         };
         appWindow.Title = "Audibly — Audiobook Player";
         appWindow.SetIcon("Assets/logo.ico");
@@ -185,6 +220,8 @@ public partial class App : Application
             await _dispatcherQueue.EnqueueAsync(() => HandleFileActivation(storageFile));
 
         Window.Activate();
+        
+        ViewModel.LoggingService.Log("Application started successfully");
     }
 
     private async void HandleFileActivation(IStorageFile storageFile, bool onAppInstanceActivated = false)
@@ -240,7 +277,7 @@ public partial class App : Application
                 Message = "An error occurred while trying to open the file.",
                 Severity = InfoBarSeverity.Error
             });
-            ViewModel.LoggingService.LogError(e, true);
+            ViewModel.LoggingService.LogError(e, includeStackTrace: true);
 
             if (onAppInstanceActivated)
                 await DialogService.ShowErrorDialogAsync("File Activation Error", e.Message);
@@ -391,7 +428,7 @@ public partial class App : Application
             }
             catch (Exception e)
             {
-                ViewModel.LoggingService.LogError(e, true);
+                ViewModel.LoggingService.LogError(e, includeStackTrace: true);
 
                 // delete the old database
                 using (var context = new AudiblyContext(dbOptions))
@@ -427,7 +464,7 @@ public partial class App : Application
             }
             catch (Exception e)
             {
-                ViewModel.LoggingService.LogError(e, true);
+                ViewModel.LoggingService.LogError(e, includeStackTrace: true);
                 Repository = new SqlAudiblyRepository(dbOptions);
             }
     }

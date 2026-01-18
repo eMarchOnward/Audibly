@@ -46,7 +46,7 @@ public partial class BookmarksViewModel : BindableBase
         if (App.PlayerViewModel.NowPlaying == null) return;
 
         var note = string.IsNullOrWhiteSpace(NewBookmarkNote)
-            ? DateTime.Now.ToString("MM/dd/yyyy hh:ss")
+            ? DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss")
             : NewBookmarkNote;
 
         var bookmark = new Bookmark

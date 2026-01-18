@@ -88,34 +88,42 @@ internal sealed class GlobalKeyboardHook : IDisposable
                 // Only process if ONLY Ctrl is pressed (no other modifiers)
                 if (ctrlDown && !shiftDown && !altDown && !winDown)
                 {
-                    bool handled = false;
+                    Action? callback = null;
 
                     switch (vk)
                     {
                         case VK_UP:
-                            OnCtrlUp?.Invoke();
-                            handled = OnCtrlUp != null;
+                            callback = OnCtrlUp;
                             break;
                         case VK_DOWN:
-                            OnCtrlDown?.Invoke();
-                            handled = OnCtrlDown != null;
+                            callback = OnCtrlDown;
                             break;
                         case VK_LEFT:
-                            OnCtrlLeft?.Invoke();
-                            handled = OnCtrlLeft != null;
+                            callback = OnCtrlLeft;
                             break;
                         case VK_RIGHT:
-                            OnCtrlRight?.Invoke();
-                            handled = OnCtrlRight != null;
+                            callback = OnCtrlRight;
                             break;
                         case VK_SPACE:
-                            OnCtrlSpace?.Invoke();
-                            handled = OnCtrlSpace != null;
+                            callback = OnCtrlSpace;
                             break;
                     }
 
-                    if (handled)
+                    if (callback != null)
                     {
+                        // Invoke callback asynchronously to prevent blocking the hook
+                        ThreadPool.QueueUserWorkItem(_ =>
+                        {
+                            try
+                            {
+                                callback.Invoke();
+                            }
+                            catch
+                            {
+                                // Swallow exceptions from callbacks to prevent hook crashes
+                            }
+                        });
+
                         // Return a non-zero value to prevent propagation to other apps/windows.
                         return (IntPtr)1;
                     }

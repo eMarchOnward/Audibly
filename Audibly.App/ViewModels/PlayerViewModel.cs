@@ -20,7 +20,8 @@ namespace Audibly.App.ViewModels;
 
 public class PlayerViewModel : BindableBase, IDisposable
 {
-    private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    // Change from field initializer to nullable and initialize in constructor
+    private DispatcherQueue? _dispatcherQueue;
 
     /// <summary>
     ///     Gets the app-wide MediaPlayer instance.
@@ -83,6 +84,8 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     public PlayerViewModel()
     {
+        // Move dispatcher queue initialization here
+        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         InitializeAudioPlayer();
     }
 
