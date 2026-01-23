@@ -99,10 +99,14 @@ public class MainViewModel : BindableBase
         {
             _currentSortMode = (AudiobookSortMode)UserSettings.SortMode;
         }
-        catch
-        {
-            _currentSortMode = AudiobookSortMode.Alphabetical;
-        }
+                catch (Exception ex)
+                {
+                    _currentSortMode = AudiobookSortMode.Alphabetical;
+        #if DEBUG
+                    LoggingService.LogError(ex, true);
+                    throw;
+        #endif
+                }
 
         Task.Run(() => GetAudiobookListAsync(true));
 
@@ -361,11 +365,14 @@ public class MainViewModel : BindableBase
                 foreach (var a in currentAudiobooks) Audiobooks.Add(a);
             });
         }
-        catch (Exception ex)
-        {
-            LoggingService.LogError(ex, true);
-        }
-    }
+                catch (Exception ex)
+                {
+                    LoggingService.LogError(ex, true);
+        #if DEBUG
+                    throw;
+        #endif
+                }
+            }
 
     /// <summary>
     ///     Gets the complete list of audiobooks from the database.
@@ -429,17 +436,20 @@ public class MainViewModel : BindableBase
                 IsLoading = false;
             });
         }
-        catch (Exception ex)
-        {
-            // Handle the exception
-            LoggingService.LogError(ex, true);
-        }
-    }
+                catch (Exception ex)
+                {
+                    // Handle the exception
+                    LoggingService.LogError(ex, true);
+        #if DEBUG
+                    throw;
+        #endif
+                }
+            }
 
-    /// <summary>
-    ///     Saves any modified audiobooks and reloads the audiobook list from the database.
-    /// </summary>
-    public void Refresh()
+            /// <summary>
+            ///     Saves any modified audiobooks and reloads the audiobook list from the database.
+            /// </summary>
+            public void Refresh()
     {
         Task.Run(async () =>
         {
@@ -485,14 +495,17 @@ public class MainViewModel : BindableBase
                 });
             });
         }
-        catch (Exception ex)
-        {
-            // Handle the exception
-            LoggingService.LogError(ex, true);
+                catch (Exception ex)
+                {
+                    // Handle the exception
+                    LoggingService.LogError(ex, true);
 
-            await DialogService.ShowErrorDialogAsync("Failed to delete audiobook", ex.Message);
-        }
-    }
+                    await DialogService.ShowErrorDialogAsync("Failed to delete audiobook", ex.Message);
+        #if DEBUG
+                    throw;
+        #endif
+                }
+            }
 
     // todo: fix the bug here and add a confirmation dialog
     /// <summary>
@@ -712,20 +725,23 @@ public class MainViewModel : BindableBase
                 Severity = InfoBarSeverity.Success
             });
         }
-        catch (Exception exception)
-        {
-            UserSettings.ShowDataMigrationFailedDialog = true;
+                catch (Exception exception)
+                {
+                    UserSettings.ShowDataMigrationFailedDialog = true;
 
-            // log the error
-            LoggingService.LogError(exception, true);
+                    // log the error
+                    LoggingService.LogError(exception, true);
 
-            // notify user that we failed to import their audiobooks
-            EnqueueNotification(new Notification
-            {
-                Message = "Data Migration Failed",
-                Severity = InfoBarSeverity.Error
-            });
-        }
+                    // notify user that we failed to import their audiobooks
+                    EnqueueNotification(new Notification
+                    {
+                        Message = "Data Migration Failed",
+                        Severity = InfoBarSeverity.Error
+                    });
+        #if DEBUG
+                    throw;
+        #endif
+                }
         finally
         {
             await DialogService.CloseProgressDialogAsync();
@@ -1202,16 +1218,20 @@ public class MainViewModel : BindableBase
                 Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning
             });
         }
-        catch (Exception e)
-        {
-            importFailed = true;
-            EnqueueNotification(new Notification
-            {
-                Message = "Failed to import audiobook. Path: " + file.Path,
-                Severity = InfoBarSeverity.Error
-            });
-            LoggingService.Log(e.Message);
-        }
+                catch (Exception e)
+                {
+                    importFailed = true;
+                    EnqueueNotification(new Notification
+                    {
+                        Message = "Failed to import audiobook. Path: " + file.Path,
+                        Severity = InfoBarSeverity.Error
+                    });
+                    LoggingService.Log(e.Message);
+        #if DEBUG
+                    LoggingService.LogError(e, true);
+                    throw;
+        #endif
+                }
 
         await DialogService.CloseProgressDialogAsync();
 
@@ -1282,25 +1302,28 @@ public class MainViewModel : BindableBase
                 }
             }
 
-            await FileImporter.ImportDirectoryAsync(folder.Path, token, ProgressCallback);
-        }
-        catch (OperationCanceledException)
-        {
-            EnqueueNotification(new Notification
-            {
-                Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning
-            });
-        }
-        catch (Exception e)
-        {
-            EnqueueNotification(new Notification
-            {
-                Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
-            });
-            LoggingService.LogError(e, true);
-        }
+                        await FileImporter.ImportDirectoryAsync(folder.Path, token, ProgressCallback);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        EnqueueNotification(new Notification
+                        {
+                            Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning
+                        });
+                    }
+                    catch (Exception e)
+                    {
+                        EnqueueNotification(new Notification
+                        {
+                            Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
+                        });
+                        LoggingService.LogError(e, true);
+            #if DEBUG
+                        throw;
+            #endif
+                    }
 
-        await DialogService.CloseProgressDialogAsync();
+                    await DialogService.CloseProgressDialogAsync();
 
         await _dispatcherQueue.EnqueueAsync(() =>
         {
@@ -1399,19 +1422,22 @@ public class MainViewModel : BindableBase
                 Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning
             });
         }
-        catch (Exception exception)
-        {
-            EnqueueNotification(new Notification
-            {
-                Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
-            });
-            LoggingService.LogError(exception, true);
-        }
-        finally
-        {
-            // clear selected files
-            SelectedFiles.Clear();
-        }
+                catch (Exception exception)
+                {
+                    EnqueueNotification(new Notification
+                    {
+                        Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
+                    });
+                    LoggingService.LogError(exception, true);
+        #if DEBUG
+                    throw;
+        #endif
+                }
+                finally
+                {
+                    // clear selected files
+                    SelectedFiles.Clear();
+                }
 
         await DialogService.CloseProgressDialogAsync();
 
@@ -1500,18 +1526,21 @@ public class MainViewModel : BindableBase
                 Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning
             });
         }
-        catch (Exception e)
-        {
-            EnqueueNotification(new Notification
-            {
-                Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
-            });
-            LoggingService.LogError(e, true);
-        }
+                catch (Exception e)
+                {
+                    EnqueueNotification(new Notification
+                    {
+                        Message = "Failed to import audiobooks!", Severity = InfoBarSeverity.Error
+                    });
+                    LoggingService.LogError(e, true);
+        #if DEBUG
+                    throw;
+        #endif
+                }
 
-        await DialogService.CloseProgressDialogAsync();
+                await DialogService.CloseProgressDialogAsync();
 
-        if (failedBooks > 0)
+                if (failedBooks > 0)
             EnqueueNotification(new Notification
             {
                 Message = $"{failedBooks} Audiobooks failed to import!", Severity = InfoBarSeverity.Error
@@ -1549,12 +1578,15 @@ public class MainViewModel : BindableBase
                 .OrderBy(f => f)
                 .ToArray();
         }
-        catch (Exception ex)
-        {
-            LoggingService.LogError(ex, true);
-            EnqueueNotification(new Notification { Message = "Failed to read folder contents.", Severity = InfoBarSeverity.Error });
-            return;
-        }
+                catch (Exception ex)
+                {
+                    LoggingService.LogError(ex, true);
+                    EnqueueNotification(new Notification { Message = "Failed to read folder contents.", Severity = InfoBarSeverity.Error });
+        #if DEBUG
+                    throw;
+        #endif
+                    return;
+                }
 
         if (filesArray.Length == 0)
         {
@@ -1604,11 +1636,14 @@ public class MainViewModel : BindableBase
         {
             EnqueueNotification(new Notification { Message = "Import operation was cancelled!", Severity = InfoBarSeverity.Warning });
         }
-        catch (Exception ex)
-        {
-            EnqueueNotification(new Notification { Message = "Failed to import audiobook from folder!", Severity = InfoBarSeverity.Error });
-            LoggingService.LogError(ex, true);
-        }
+                catch (Exception ex)
+                {
+                    EnqueueNotification(new Notification { Message = "Failed to import audiobook from folder!", Severity = InfoBarSeverity.Error });
+                    LoggingService.LogError(ex, true);
+        #if DEBUG
+                    throw;
+        #endif
+                }
 
         await DialogService.CloseProgressDialogAsync();
 

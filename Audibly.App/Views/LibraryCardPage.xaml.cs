@@ -110,22 +110,25 @@ public sealed partial class LibraryCardPage : Page
         {
             await DialogService.ShowDataMigrationRequiredDialogAsync();
         }
-        catch (Exception exception)
-        {
-            UserSettings.NeedToImportAudiblyExport = false;
-            UserSettings.ShowDataMigrationFailedDialog = false;
+                catch (Exception exception)
+                {
+                    UserSettings.NeedToImportAudiblyExport = false;
+                    UserSettings.ShowDataMigrationFailedDialog = false;
 
-            // log the error
-            ViewModel.LoggingService.LogError(exception, true);
+                    // log the error
+                    ViewModel.LoggingService.LogError(exception, true);
 
-            // notify user that we failed to import their audiobooks
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = "Data Migration Failed",
-                Severity = InfoBarSeverity.Error
-            });
-        }
-    }
+                    // notify user that we failed to import their audiobooks
+                    ViewModel.EnqueueNotification(new Notification
+                    {
+                        Message = "Data Migration Failed",
+                        Severity = InfoBarSeverity.Error
+                    });
+        #if DEBUG
+                    throw;
+        #endif
+                }
+            }
 
     private async void RefreshButton_OnClick(object sender, RoutedEventArgs e)
     {
@@ -369,17 +372,20 @@ public sealed partial class LibraryCardPage : Page
                 await ViewModel.ImportAudiobookFromFolderAsync(folder.Path);
             }
         }
-        catch (Exception ex)
-        {
-            // Log and show notification on failure
-            ViewModel.LoggingService.LogError(ex, true);
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = "Failed to import dropped item.",
-                Severity = InfoBarSeverity.Error
-            });
-        }
-    }
+                catch (Exception ex)
+                {
+                    // Log and show notification on failure
+                    ViewModel.LoggingService.LogError(ex, true);
+                    ViewModel.EnqueueNotification(new Notification
+                    {
+                        Message = "Failed to import dropped item.",
+                        Severity = InfoBarSeverity.Error
+                    });
+        #if DEBUG
+                    throw;
+        #endif
+                }
+            }
 
     #region debug button
 

@@ -94,17 +94,14 @@ public partial class App : Application
     /// <summary>
     ///     Gets the root frame of the app. This contains the nav view and the player page
     /// </summary>
-    public static Frame? RootFrame { get; private set; }
+    public static Frame? RootFrame { get; private set; }        
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        // Prevent the app from crashing
-        e.Handled = true;
-        
         try
         {
             ViewModel.LoggingService.LogError(e.Exception, includeStackTrace: true);
-            
+
             // Optionally show a user-friendly message
             System.Diagnostics.Debug.WriteLine($"Unhandled exception: {e.Exception.Message}");
         }
@@ -114,13 +111,15 @@ public partial class App : Application
             System.Diagnostics.Debug.WriteLine($"Failed to log exception: {e.Exception}");
             System.Diagnostics.Debug.WriteLine($"Logging error: {loggingEx}");
         }
+
+#if !DEBUG
+        // Prevent the app from crashing in release builds
+        e.Handled = true;
+#endif
     }
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        // Prevent the app from crashing
-        e.SetObserved();
-        
         try
         {
             ViewModel.LoggingService.LogError(e.Exception, includeStackTrace: true);
@@ -131,6 +130,11 @@ public partial class App : Application
             System.Diagnostics.Debug.WriteLine($"Failed to log unobserved task exception: {e.Exception}");
             System.Diagnostics.Debug.WriteLine($"Logging error: {loggingEx}");
         }
+
+#if !DEBUG
+        // Prevent the app from crashing in release builds
+        e.SetObserved();
+#endif
     }
 
     /// <summary>
@@ -184,6 +188,9 @@ public partial class App : Application
         win32WindowHelper.SetWindowMinMaxSize(new Win32WindowHelper.POINT { x = 940, y = 640 });
 
         UseSqlite();
+
+        // Repository is now initialized; safe to load list
+        await ViewModel.GetAudiobookListAsync(true);
 
         RootFrame = Window.Content as Frame;
 
