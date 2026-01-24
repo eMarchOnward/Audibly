@@ -90,6 +90,15 @@ public sealed partial class NewMiniPlayerPage : Page
     {
         // Clean up handlers attached at Loaded time.
         this.KeyDown -= NewMiniPlayerPage_KeyDown;
+        
+        // Clean up cancellation token source
+        _playbackSpeedFlyoutCts?.Cancel();
+        _playbackSpeedFlyoutCts?.Dispose();
+        _playbackSpeedFlyoutCts = null;
+        
+        // Clean up global keyboard hook
+        _globalKeyboardHook?.Dispose();
+        _globalKeyboardHook = null;
     }
 
     private void NewMiniPlayerPage_KeyDown(object sender, KeyRoutedEventArgs args)
@@ -183,22 +192,35 @@ public sealed partial class NewMiniPlayerPage : Page
     {
         // Cancel any previous close operation
         _playbackSpeedFlyoutCts?.Cancel();
+        _playbackSpeedFlyoutCts?.Dispose();
         _playbackSpeedFlyoutCts = new CancellationTokenSource();
-        var token = _playbackSpeedFlyoutCts.Token;
+        
+        // Fire and forget, but with proper async Task method
+        _ = ClosePlaybackSpeedFlyoutAsync(_playbackSpeedFlyoutCts.Token);
+    }
 
-        _dispatcherQueue.TryEnqueue(async () =>
+    private async Task ClosePlaybackSpeedFlyoutAsync(CancellationToken token)
+    {
+        try
         {
-            try
+            await Task.Delay(2000, token);
+            
+            // Only access UI on dispatcher thread
+            await _dispatcherQueue.EnqueueAsync(() =>
             {
-                await Task.Delay(2000, token);
                 if (PlaybackSpeedSliderFlyout.IsOpen)
                     PlaybackSpeedSliderFlyout.Hide();
-            }
-            catch (TaskCanceledException)
-            {
-                // Ignore cancellation
-            }
-        });
+            });
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignore cancellation - this is expected when user adjusts speed multiple times
+        }
+        catch (Exception ex)
+        {
+            // Log unexpected errors
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
     }
 
     private void ResetPlaybackSpeed()
@@ -351,41 +373,13 @@ public sealed partial class NewMiniPlayerPage : Page
                 },
                 OnCtrlLeft = () =>
                 {
-                    _dispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            // Prefer using the control's public SkipForwardAsync if available.
-                            if (PlaySkipButtonsStack.SkipBackAsync != null)
-                            {
-                                await PlaySkipButtonsStack.SkipBackAsync();
-                            }
-                            else
-                            {
-                                //await PerformSkipForwardAsync();
-                            }
-                        }
-                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
-                    });
+                    // Fire and forget with proper Task method
+                    _ = PerformSkipBackOnDispatcherAsync();
                 },
                 OnCtrlRight = () =>
                 {
-                    _dispatcherQueue.TryEnqueue(async () =>
-                    {
-                        try
-                        {
-                            // Prefer using the control's public SkipForwardAsync if available.
-                            if (PlaySkipButtonsStack.SkipForwardAsync != null)
-                            {
-                                await PlaySkipButtonsStack.SkipForwardAsync();
-                            }
-                            else
-                            {
-                                //await PerformSkipForwardAsync();
-                            }
-                        }
-                        catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
-                    });
+                    // Fire and forget with proper Task method
+                    _ = PerformSkipForwardOnDispatcherAsync();
                 },
                 OnCtrlSpace = () =>
                 {
@@ -403,6 +397,50 @@ public sealed partial class NewMiniPlayerPage : Page
                     });
                 }
             };
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    private async Task PerformSkipBackOnDispatcherAsync()
+    {
+        try
+        {
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                if (PlaySkipButtonsStack.SkipBackAsync != null)
+                {
+                    await PlaySkipButtonsStack.SkipBackAsync();
+                }
+                else
+                {
+                    await PerformSkipBackAsync();
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            App.ViewModel.LoggingService?.LogError(ex, true);
+        }
+    }
+
+    private async Task PerformSkipForwardOnDispatcherAsync()
+    {
+        try
+        {
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                if (PlaySkipButtonsStack.SkipForwardAsync != null)
+                {
+                    await PlaySkipButtonsStack.SkipForwardAsync();
+                }
+                else
+                {
+                    await PerformSkipForwardAsync();
+                }
+            });
         }
         catch (Exception ex)
         {
