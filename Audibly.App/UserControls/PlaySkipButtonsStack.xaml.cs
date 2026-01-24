@@ -5,17 +5,17 @@ using Audibly.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Windows.Media.Playback;
+using Audibly.App.Helpers;
 
 namespace Audibly.App.UserControls;
 
-public sealed partial class PlaySkipButtonsStack : UserControl
+public sealed partial class PlaySkipButtonsStack : UserControl, INotifyPropertyChanged
 {
-    private static readonly TimeSpan _skipBackButtonAmount = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan _skipForwardButtonAmount = TimeSpan.FromSeconds(30);
-
     // Track last previous chapter button click time
     private DateTime _lastPreviousChapterClick = DateTime.MinValue;
     private static readonly TimeSpan _doubleClickThreshold = TimeSpan.FromSeconds(3);
@@ -26,9 +26,32 @@ public sealed partial class PlaySkipButtonsStack : UserControl
     public static readonly DependencyProperty PlayButtonSizeProperty = DependencyProperty.Register(
         nameof(PlayButtonSize), typeof(double), typeof(PlaySkipButtonsStack), new PropertyMetadata(32.0));
 
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public PlaySkipButtonsStack()
     {
         InitializeComponent();
+        
+        // Subscribe to settings changes in the ViewModel
+        if (App.ViewModel != null)
+        {
+            App.ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+        }
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.SkipBackSeconds) || 
+            e.PropertyName == nameof(MainViewModel.SkipForwardSeconds))
+        {
+            OnPropertyChanged(nameof(SkipBackTooltip));
+            OnPropertyChanged(nameof(SkipForwardTooltip));
+        }
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
     /// <summary>
@@ -40,6 +63,10 @@ public sealed partial class PlaySkipButtonsStack : UserControl
     ///     Gets the app-wide PlayerViewModel instance.
     /// </summary>
     public PlayerViewModel PlayerViewModel => App.PlayerViewModel;
+
+    public string SkipBackTooltip => $"Skip backward {UserSettings.SkipBackSeconds} seconds";
+
+    public string SkipForwardTooltip => $"Skip forward {UserSettings.SkipForwardSeconds} seconds";
 
     public double Spacing
     {
@@ -199,6 +226,7 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         PlayerViewModel.CurrentPosition =
             TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
 
+
         // Update progress since chapter changed
         PlayerViewModel.UpdateAudiobookProgress();
         PlayerViewModel.NowPlaying.RefreshProgress();
@@ -206,25 +234,43 @@ public sealed partial class PlaySkipButtonsStack : UserControl
         await PlayerViewModel.NowPlaying.SaveAsync();
     }
 
+    private static TimeSpan GetSkipAmount(int baseSeconds)
+    {
+        var PlayerViewModel = App.PlayerViewModel;
+        var seconds = baseSeconds;
+        
+        if (UserSettings.ScaleSkipWithPlaybackSpeed)
+        {
+            var playbackSpeed = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackRate;
+            seconds = (int)(baseSeconds * playbackSpeed);
+        }
+        
+        return TimeSpan.FromSeconds(seconds);
+    }
+
     public static async Task SkipBackAsync()
     {
         var PlayerViewModel = App.PlayerViewModel;
+        var skipBackButtonAmount = GetSkipAmount(UserSettings.SkipBackSeconds);
 
         // If we don't have NowPlaying or a CurrentChapter, fall back to previous behavior.
         if (PlayerViewModel.NowPlaying == null || PlayerViewModel.NowPlaying.CurrentChapter == null)
         {
-            PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition - _skipBackButtonAmount > TimeSpan.Zero
-                ? PlayerViewModel.CurrentPosition - _skipBackButtonAmount
+            PlayerViewModel.CurrentPosition = PlayerViewModel.CurrentPosition - skipBackButtonAmount > TimeSpan.Zero
+                ? PlayerViewModel.CurrentPosition - skipBackButtonAmount
                 : TimeSpan.Zero;
 
             if (PlayerViewModel.NowPlaying != null)
                 await PlayerViewModel.NowPlaying.SaveAsync();
 
+
+
             return;
         }
 
         var currentPos = PlayerViewModel.CurrentPosition;
-        var candidate = currentPos - _skipBackButtonAmount;
+        var candidate = currentPos - skipBackButtonAmount;
+
 
         // Start of the current chapter (ms -> TimeSpan)
         var chapterStart = TimeSpan.FromMilliseconds(PlayerViewModel.NowPlaying.CurrentChapter.StartTime);
@@ -344,14 +390,17 @@ public sealed partial class PlaySkipButtonsStack : UserControl
     public static async Task SkipForwardAsync()
     {
         var PlayerViewModel = App.PlayerViewModel;
+        var skipForwardButtonAmount = GetSkipAmount(UserSettings.SkipForwardSeconds);
 
         // If we don't have NowPlaying, fall back to simple behavior
         if (PlayerViewModel.NowPlaying == null)
         {
             var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
-            var newPos = PlayerViewModel.CurrentPosition + _skipForwardButtonAmount <= naturalDuration
-                ? PlayerViewModel.CurrentPosition + _skipForwardButtonAmount
+            var newPos = PlayerViewModel.CurrentPosition + skipForwardButtonAmount <= naturalDuration
+
+                ? PlayerViewModel.CurrentPosition + skipForwardButtonAmount
                 : naturalDuration;
+
 
             PlayerViewModel.CurrentPosition = newPos;
             return;
@@ -359,7 +408,8 @@ public sealed partial class PlaySkipButtonsStack : UserControl
 
         // Calculate the new absolute position
         var currentAbsolutePositionMs = PlayerViewModel.NowPlaying.CurrentTimeMs;
-        var newAbsolutePositionMs = currentAbsolutePositionMs + (long)_skipForwardButtonAmount.TotalMilliseconds;
+        var newAbsolutePositionMs = currentAbsolutePositionMs + (long)skipForwardButtonAmount.TotalMilliseconds;
+
         
         // Calculate total audiobook duration in milliseconds
         var totalDurationMs = (long)(PlayerViewModel.NowPlaying.Duration * 1000);

@@ -42,7 +42,7 @@
             <FontIcon
                 FontFamily="Segoe MDL2 Assets"
                 FontSize="24"
-                Glyph="&#xE76B;" />
+                Glyph="&#xE892;" />
         </Button>
 
         <RepeatButton
@@ -50,7 +50,7 @@
             Click="SkipBackButton_OnClick"
             Delay="500"
             Interval="100"
-            ToolTipService.ToolTip="Skip backward 10 seconds"
+            ToolTipService.ToolTip="{x:Bind SkipBackTooltip, Mode=OneWay}"
             x:Name="SkipBackButton"
             IsTabStop="False">
             <RepeatButton.KeyboardAccelerators>
@@ -58,9 +58,10 @@
             </RepeatButton.KeyboardAccelerators>
             <FontIcon
                 FontFamily="Segoe MDL2 Assets"
-                FontSize="24"
-                Glyph="&#xED3C;" />
+                FontSize="20"
+                Glyph="&#xE76B;" />
         </RepeatButton>
+
 
         <Button
             BorderThickness="0"
@@ -78,7 +79,7 @@
             Click="SkipForwardButton_OnClick"
             Delay="500"
             Interval="100"
-            ToolTipService.ToolTip="Skip forward 30 seconds"
+            ToolTipService.ToolTip="{x:Bind SkipForwardTooltip, Mode=OneWay}"
             x:Name="SkipForwardButton"
             IsTabStop="False">
             <RepeatButton.KeyboardAccelerators>
@@ -86,9 +87,10 @@
             </RepeatButton.KeyboardAccelerators>
             <FontIcon
                 FontFamily="Segoe MDL2 Assets"
-                FontSize="24"
-                Glyph="&#xED3D;" />
+                FontSize="20"
+                Glyph="&#xE76C;" />
         </RepeatButton>
+
 
         <Button
             Background="Transparent"
@@ -100,7 +102,7 @@
             <FontIcon
                 FontFamily="Segoe MDL2 Assets"
                 FontSize="24"
-                Glyph="&#xE76C;" />
+                Glyph="&#xE893;" />
         </Button>
 
     </StackPanel>

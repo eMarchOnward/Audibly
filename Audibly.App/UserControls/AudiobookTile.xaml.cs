@@ -619,6 +619,7 @@ public sealed partial class AudiobookTile : UserControl
             await _dispatcherQueue.EnqueueAsync(async () =>
             {
                 await ViewModel.GetAudiobookListAsync();
+                ViewModel.NotifyClearSearchText();
             });
 
             // If the edited audiobook is currently playing, update NowPlaying metadata

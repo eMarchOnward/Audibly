@@ -476,7 +476,13 @@ public sealed partial class NewMiniPlayerPage : Page
     {
         try
         {
-            var skipAmount = TimeSpan.FromSeconds(10);
+            var skipAmount = TimeSpan.FromSeconds(Helpers.UserSettings.SkipBackSeconds);
+            
+            if (Helpers.UserSettings.ScaleSkipWithPlaybackSpeed)
+            {
+                var playbackSpeed = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackRate;
+                skipAmount = TimeSpan.FromSeconds(Helpers.UserSettings.SkipBackSeconds * playbackSpeed);
+            }
 
             if (PlayerViewModel.NowPlaying == null || PlayerViewModel.NowPlaying.CurrentChapter == null)
             {
@@ -498,6 +504,7 @@ public sealed partial class NewMiniPlayerPage : Page
             if (candidate < chapterStart)
                 PlayerViewModel.CurrentPosition = chapterStart;
             else
+
                 PlayerViewModel.CurrentPosition = candidate;
 
             await PlayerViewModel.NowPlaying.SaveAsync();
@@ -513,7 +520,13 @@ public sealed partial class NewMiniPlayerPage : Page
     {
         try
         {
-            var skipAmount = TimeSpan.FromSeconds(30);
+            var skipAmount = TimeSpan.FromSeconds(Helpers.UserSettings.SkipForwardSeconds);
+            
+            if (Helpers.UserSettings.ScaleSkipWithPlaybackSpeed)
+            {
+                var playbackSpeed = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackRate;
+                skipAmount = TimeSpan.FromSeconds(Helpers.UserSettings.SkipForwardSeconds * playbackSpeed);
+            }
 
             var naturalDuration = PlayerViewModel.MediaPlayer.PlaybackSession.NaturalDuration;
             var maxDuration = naturalDuration; // naturalDuration is already a TimeSpan
@@ -532,6 +545,7 @@ public sealed partial class NewMiniPlayerPage : Page
             App.ViewModel.LoggingService?.LogError(ex, true);
         }
     }
+
 
     private void BackToLibraryButton_Click(object sender, RoutedEventArgs e)
     {

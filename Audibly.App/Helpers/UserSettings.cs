@@ -284,4 +284,73 @@ public static class UserSettings
         }
         set => ApplicationData.Current.LocalSettings.Values["WindowY"] = value;
     }
+
+    public static int SkipBackSeconds
+    {
+        get
+        {
+            try
+            {
+                var skipBackSeconds = ApplicationData.Current.LocalSettings.Values["SkipBackSeconds"];
+                if (skipBackSeconds != null)
+                    if (int.TryParse(skipBackSeconds.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["SkipBackSeconds"] = 10;
+                return 10;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 10;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["SkipBackSeconds"] = value;
+    }
+
+    public static int SkipForwardSeconds
+    {
+        get
+        {
+            try
+            {
+                var skipForwardSeconds = ApplicationData.Current.LocalSettings.Values["SkipForwardSeconds"];
+                if (skipForwardSeconds != null)
+                    if (int.TryParse(skipForwardSeconds.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["SkipForwardSeconds"] = 30;
+                return 30;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 30;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["SkipForwardSeconds"] = value;
+    }
+
+    public static bool ScaleSkipWithPlaybackSpeed
+    {
+        get
+        {
+            try
+            {
+                var scaleSkip = ApplicationData.Current.LocalSettings.Values["ScaleSkipWithPlaybackSpeed"];
+                if (scaleSkip != null)
+                    if (bool.TryParse(scaleSkip.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["ScaleSkipWithPlaybackSpeed"] = false;
+                return false;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return false;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["ScaleSkipWithPlaybackSpeed"] = value;
+    }
 }

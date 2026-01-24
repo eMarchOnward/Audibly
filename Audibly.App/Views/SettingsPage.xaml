@@ -133,7 +133,74 @@
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
+                <!--  Skip settings  -->
+                <toolkit:SettingsExpander Description="Configure skip back/forward button and hotkey behavior" Header="Skip Settings">
+                    <toolkit:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE892;" />
+                    </toolkit:SettingsExpander.HeaderIcon>
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard Header="Skip back time (seconds)">
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <Slider
+                                    AutomationProperties.AutomationId="skipBackSecondsSlider"
+                                    LargeChange="5"
+                                    Maximum="60"
+                                    Minimum="5"
+                                    SmallChange="1"
+                                    SnapsTo="StepValues"
+                                    StepFrequency="1"
+                                    ToolTipService.ToolTip="Skip back time in seconds"
+                                    Value="{x:Bind ViewModel.SkipBackSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="200"
+                                    x:Name="skipBackSecondsSlider" />
+
+                                <TextBox
+                                    HorizontalContentAlignment="Center"
+                                    IsReadOnly="True"
+                                    Text="{x:Bind ViewModel.SkipBackSeconds, Mode=OneWay}"
+                                    TextAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Width="32"
+                                    x:Name="skipBackSecondsTextBox" />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard Header="Skip forward time (seconds)">
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <Slider
+                                    AutomationProperties.AutomationId="skipForwardSecondsSlider"
+                                    LargeChange="10"
+                                    Maximum="120"
+                                    Minimum="5"
+                                    SmallChange="5"
+                                    SnapsTo="StepValues"
+                                    StepFrequency="5"
+                                    ToolTipService.ToolTip="Skip forward time in seconds"
+                                    Value="{x:Bind ViewModel.SkipForwardSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="200"
+                                    x:Name="skipForwardSecondsSlider" />
+
+                                <TextBox
+                                    HorizontalContentAlignment="Center"
+                                    IsReadOnly="True"
+                                    Text="{x:Bind ViewModel.SkipForwardSeconds, Mode=OneWay}"
+                                    TextAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Width="32"
+                                    x:Name="skipForwardSecondsTextBox" />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard 
+                            Description="When enabled, skip times will be multiplied by the current playback speed. For example, at 1.5x speed, a 10 second skip back becomes 15 seconds."
+                            Header="Scale with playback speed">
+                            <ToggleSwitch 
+                                IsOn="{x:Bind ViewModel.ScaleSkipWithPlaybackSpeed, Mode=TwoWay}"
+                                x:Name="scaleSkipToggle" />
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
                 <!--  Hotkeys  -->
+
                 <toolkit:SettingsExpander Description="Keyboard shortcuts" Header="Hotkeys">
                     <toolkit:SettingsExpander.HeaderIcon>
                         <FontIcon Glyph="&#xE765;" />

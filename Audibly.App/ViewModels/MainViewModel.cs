@@ -177,7 +177,47 @@ public class MainViewModel : BindableBase
         }
     }
 
+    public int SkipBackSeconds
+    {
+        get => UserSettings.SkipBackSeconds;
+        set
+        {
+            if (UserSettings.SkipBackSeconds != value)
+            {
+                UserSettings.SkipBackSeconds = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public int SkipForwardSeconds
+    {
+        get => UserSettings.SkipForwardSeconds;
+        set
+        {
+            if (UserSettings.SkipForwardSeconds != value)
+            {
+                UserSettings.SkipForwardSeconds = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool ScaleSkipWithPlaybackSpeed
+    {
+        get => UserSettings.ScaleSkipWithPlaybackSpeed;
+        set
+        {
+            if (UserSettings.ScaleSkipWithPlaybackSpeed != value)
+            {
+                UserSettings.ScaleSkipWithPlaybackSpeed = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     /// <summary>
+
     ///     Gets or sets a value indicating whether the start panel is visible.
     /// </summary>
     public bool ShowStartPanel
