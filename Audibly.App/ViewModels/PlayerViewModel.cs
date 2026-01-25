@@ -283,13 +283,13 @@ public class PlayerViewModel : BindableBase, IDisposable
         
         // Determine rewind amount based on time since last played
         TimeSpan rewindAmount = TimeSpan.Zero;
-        if (timeSinceLastPlayed.TotalSeconds > 20 && timeSinceLastPlayed.TotalMinutes <= 5)
-        {
-            rewindAmount = TimeSpan.FromSeconds(2);
-        }
-        else if (timeSinceLastPlayed.TotalMinutes > 5)
+        if (timeSinceLastPlayed.TotalSeconds > 30 && timeSinceLastPlayed.TotalMinutes <= 10)
         {
             rewindAmount = TimeSpan.FromSeconds(4);
+        }
+        else if (timeSinceLastPlayed.TotalMinutes > 10)
+        {
+            rewindAmount = TimeSpan.FromSeconds(10);
         }
 
         // No rewind needed if time since last played is less than 20 seconds
