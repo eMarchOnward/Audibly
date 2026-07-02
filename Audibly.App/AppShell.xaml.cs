@@ -30,6 +30,7 @@ namespace Audibly.App;
 public sealed partial class AppShell : Page
 {
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    private bool _isSyncingTagSelection;
 
     public readonly string LibraryLabel = "Library";
     public readonly string NowPlayingLabel = "Now Playing";
@@ -73,6 +74,12 @@ public sealed partial class AppShell : Page
 
         // Subscribe to clear tag selection event
         ViewModel.ClearTagSelection += ViewModelOnClearTagSelection;
+
+        // Reverse-sync: when SelectedTags changes (e.g. token removed in search box), update the ListView
+        ViewModel.SelectedTags.CollectionChanged += SelectedTagsOnCollectionChanged;
+
+        // After a full DB reload, re-select matching tags in the ListView
+        ViewModel.AvailableTagsReloaded += ViewModelOnAvailableTagsReloaded;
     }
 
     /// <summary>
@@ -152,10 +159,7 @@ public sealed partial class AppShell : Page
         }
         else if (item == NowPlayingMenuItem)
         {
-            // Clear tag filters when navigating to Now Playing view
-            ViewModel.SelectedTags.Clear();
-            TagsListView?.SelectedItems.Clear();
-            
+            ViewModel.ClearSelectedTags();
             App.RootFrame?.Navigate(typeof(PlayerPage));
             PlayerViewModel.IsPlayerFullScreen = true;
             PlayerViewModel.MaximizeMinimizeGlyph = Constants.MinimizeGlyph;
@@ -212,19 +216,53 @@ public sealed partial class AppShell : Page
     private void TagsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is not ListView listView) return;
+        if (_isSyncingTagSelection) return;
+        // Ignore spurious events while AvailableTags is being repopulated (empty ItemsSource = reset in progress)
+        if (ViewModel.AvailableTags.Count == 0) return;
 
-        // Update the SelectedTags collection
-        ViewModel.SelectedTags.Clear();
-        foreach (Tag tag in listView.SelectedItems)
-        {
-            ViewModel.SelectedTags.Add(tag);
-        }
+        _isSyncingTagSelection = true;
 
-        // Update visual indicators for selected items
+        var newSelection = listView.SelectedItems.OfType<Tag>().ToList();
+        var toRemove = ViewModel.SelectedTags.Where(s => !newSelection.Any(t => t.Id == s.Id)).ToList();
+        var toAdd = newSelection.Where(t => !ViewModel.SelectedTags.Any(s => s.Id == t.Id)).ToList();
+
+        foreach (var tag in toRemove) ViewModel.SelectedTags.Remove(tag);
+        foreach (var tag in toAdd) ViewModel.SelectedTags.Add(tag);
+
+        _isSyncingTagSelection = false;
+
         UpdateTagSelectionIndicators(listView);
-
-        // Notify that selected tags have changed
         ViewModel.NotifySelectedTagsChanged();
+    }
+
+    /// <summary>
+    ///     When SelectedTags changes externally (e.g. token removed in the search box), sync the ListView.
+    /// </summary>
+    private void SelectedTagsOnCollectionChanged(object? sender,
+        System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (_isSyncingTagSelection) return;
+
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            if (TagsListView == null) return;
+            _isSyncingTagSelection = true;
+
+            var toDeselect = TagsListView.SelectedItems.OfType<Tag>()
+                .Where(t => !ViewModel.SelectedTags.Any(s => s.Id == t.Id)).ToList();
+            foreach (var tag in toDeselect)
+                TagsListView.SelectedItems.Remove(tag);
+
+            foreach (var selectedTag in ViewModel.SelectedTags)
+            {
+                var listItem = TagsListView.Items.OfType<Tag>().FirstOrDefault(t => t.Id == selectedTag.Id);
+                if (listItem != null && !TagsListView.SelectedItems.Contains(listItem))
+                    TagsListView.SelectedItems.Add(listItem);
+            }
+
+            UpdateTagSelectionIndicators(TagsListView);
+            _isSyncingTagSelection = false;
+        });
     }
 
     /// <summary>
@@ -272,22 +310,11 @@ public sealed partial class AppShell : Page
         return null;
     }
 
-    private async void ClearTagsLink_Tapped(object sender, RoutedEventArgs e)
+    private void ClearTagsLink_Tapped(object sender, RoutedEventArgs e)
     {
-        // Clear selected tags in the view model
-        ViewModel.SelectedTags.Clear();
-
-        // Clear visual selection in the ListView (if it's instantiated)
-        TagsListView?.SelectedItems.Clear();
-
-        // Notify listeners that search text should be cleared
-        ViewModel.NotifyClearSearchText();
-
-        // Notify listeners (LibraryCardPage listens for this and will refilter)
+        ViewModel.ClearSelectedTags();
+        // ListView sync is handled by SelectedTagsOnCollectionChanged
         ViewModel.NotifySelectedTagsChanged();
-
-        // Optional: explicitly reload the full audiobook list (ensures AvailableTags/data are fresh)
-        await ViewModel.GetAudiobookListAsync();
     }
 
     private void ViewModelOnClearTagSelection()
@@ -298,5 +325,27 @@ public sealed partial class AppShell : Page
             TagsListView.SelectedItems.Clear();
             UpdateTagSelectionIndicators(TagsListView);
         }
+    }
+
+    /// <summary>
+    ///     After a full DB reload, re-select any ListView rows that match SelectedTags.
+    /// </summary>
+    private void ViewModelOnAvailableTagsReloaded(object? sender, EventArgs e)
+    {
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            if (TagsListView == null) return;
+            _isSyncingTagSelection = true;
+
+            TagsListView.SelectedItems.Clear();
+            foreach (var tag in ViewModel.SelectedTags)
+            {
+                var listItem = TagsListView.Items.OfType<Tag>().FirstOrDefault(t => t.Id == tag.Id);
+                if (listItem != null) TagsListView.SelectedItems.Add(listItem);
+            }
+
+            UpdateTagSelectionIndicators(TagsListView);
+            _isSyncingTagSelection = false;
+        });
     }
 }

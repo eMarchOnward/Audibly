@@ -9,6 +9,8 @@
     xmlns:converters="using:Audibly.App.Helpers.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:models="using:Audibly.Models"
     xmlns:userControls="using:Audibly.App.UserControls"
     xmlns:viewModels="using:Audibly.App.ViewModels"
     xmlns:views="using:Audibly.App.Views"
@@ -191,17 +193,33 @@
                     <AppBarSeparator />
                 </StackPanel>
 
-                <!-- Elastic search box -->
-                <AutoSuggestBox
+                <!-- Elastic search / tag token box -->
+                <controls:TokenizingTextBox
                     Grid.Column="1"
                     x:Name="AudiobookSearchBox"
                     HorizontalAlignment="Stretch"
                     VerticalAlignment="Center"
                     Margin="8,0,8,0"
                     MinWidth="200"
-                    PlaceholderText="Search"
-                    QueryIcon="Find"
-                    Loaded="AudiobookSearchBox_Loaded" />
+                    MaxHeight="80"
+                    PlaceholderText="Search or select tags from sidebar"
+                    TokenDelimiter=""
+                    ItemsSource="{x:Bind ViewModel.SelectedTags}"
+                    TextMemberPath="Name"
+                    TextChanged="AudiobookSearchBox_TextChanged"
+                    QuerySubmitted="AudiobookSearchBox_QuerySubmitted"
+                    TokenItemAdding="AudiobookSearchBox_TokenItemAdding"
+                    TokenItemAdded="AudiobookSearchBox_TokenItemAdded"
+                    TokenItemRemoved="AudiobookSearchBox_TokenItemRemoved">
+                    <controls:TokenizingTextBox.QueryIcon>
+                        <SymbolIconSource Symbol="Find" />
+                    </controls:TokenizingTextBox.QueryIcon>
+                    <controls:TokenizingTextBox.TokenItemTemplate>
+                        <DataTemplate x:DataType="models:Tag">
+                            <TextBlock Text="{x:Bind Name}" />
+                        </DataTemplate>
+                    </controls:TokenizingTextBox.TokenItemTemplate>
+                </controls:TokenizingTextBox>
 
                 <!-- Right-aligned buttons -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">

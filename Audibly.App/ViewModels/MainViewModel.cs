@@ -71,6 +71,7 @@ public class MainViewModel : BindableBase
     private string _progressDialogText = string.Empty;
     private string _progressDialogTotalText = string.Empty;
     private AudiobookViewModel? _selectedAudiobook;
+    private string _searchText = string.Empty;
     private bool _showAlignmentGrids;
     private bool _showDebugMenu;
     private bool _showStartPanel;
@@ -149,6 +150,20 @@ public class MainViewModel : BindableBase
     ///     Event raised when tag selections should be cleared in the UI.
     /// </summary>
     public event ClearTagSelectionHandler? ClearTagSelection;
+
+    /// <summary>
+    ///     Event raised after AvailableTags is repopulated from the database.
+    /// </summary>
+    public event EventHandler? AvailableTagsReloaded;
+
+    /// <summary>
+    ///     Gets or sets the current free-text search string.
+    /// </summary>
+    public string SearchText
+    {
+        get => _searchText;
+        set => Set(ref _searchText, value);
+    }
 
     /// <summary>
     ///     Gets or sets the selected audiobook, or null if no audiobook is selected.
@@ -450,6 +465,15 @@ public class MainViewModel : BindableBase
                 // apply sort after populating lists
                 ApplySort();
 
+                // Prune SelectedTags whose tags were deleted from the DB
+                for (var i = SelectedTags.Count - 1; i >= 0; i--)
+                {
+                    if (!AvailableTags.Any(t => t.Id == SelectedTags[i].Id))
+                        SelectedTags.RemoveAt(i);
+                }
+
+                AvailableTagsReloaded?.Invoke(this, EventArgs.Empty);
+
                 if (firstRun)
                 {
                     var nowPlaying = Audiobooks.FirstOrDefault(x => x.IsNowPlaying);
@@ -601,6 +625,16 @@ public class MainViewModel : BindableBase
     public void NotifyClearTagSelection()
     {
         ClearTagSelection?.Invoke();
+    }
+
+    /// <summary>
+    ///     Removes all selected tags one by one (avoids ObservableCollection.Clear/Reset
+    ///     which causes TokenizingTextBox to misbehave).
+    /// </summary>
+    public void ClearSelectedTags()
+    {
+        while (SelectedTags.Count > 0)
+            SelectedTags.RemoveAt(SelectedTags.Count - 1);
     }
 
     /// <summary>

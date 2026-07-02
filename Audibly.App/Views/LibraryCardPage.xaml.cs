@@ -15,7 +15,9 @@ using Audibly.App.Helpers;
 using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.App.Views.ContentDialogs;
+using Audibly.Models;
 using CommunityToolkit.WinUI;
+using CommunityToolkit.WinUI.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -65,6 +67,7 @@ public sealed partial class LibraryCardPage : Page
         ViewModel.ResetFilters += ViewModelOnResetFilters;
         ViewModel.SelectedTagsChanged += ViewModelOnSelectedTagsChanged;
         ViewModel.ClearSearchText += ViewModelOnClearSearchText;
+        ViewModel.AvailableTagsReloaded += ViewModelOnAvailableTagsReloaded;
         // keep sort UI in sync with ViewModel and persisted settings
         ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
 
@@ -142,88 +145,79 @@ public sealed partial class LibraryCardPage : Page
     {
         _activeFilters.Clear();
 
-        // unchecked all the filter flyout items
         InProgressFilterCheckBox.IsChecked = false;
         NotStartedFilterCheckBox.IsChecked = false;
         CompletedFilterCheckBox.IsChecked = false;
 
-        // Clear selected tags
-        ViewModel.SelectedTags.Clear();
+        ViewModel.ClearSelectedTags();
+        ViewModel.SearchText = string.Empty;
+        if (AudiobookSearchBox != null) AudiobookSearchBox.Text = string.Empty;
 
-        await _dispatcherQueue.EnqueueAsync(() =>
-        {
-            ViewModel.Audiobooks.Clear();
-            foreach (var a in ViewModel.AudiobooksForFilter) ViewModel.Audiobooks.Add(a);
-        });
-    }
-
-    private HashSet<AudiobookViewModel> GetFilteredAudiobooks()
-    {
-        // matches audiobooks for each active filter
-        var matches = new HashSet<AudiobookViewModel>();
-        var hasTagFilter = ViewModel.SelectedTags.Count > 0;
-        var hasProgressFilter = _activeFilters.Count > 0;
-
-        foreach (var audiobook in ViewModel.AudiobooksForFilter)
-        {
-            var matchesProgressFilter = false;
-            var matchesTagFilter = false;
-
-            // Check progress filters
-            if (hasProgressFilter)
-            {
-                if (_activeFilters.Contains(AudioBookFilter.InProgress) && audiobook.Progress > 2 && !audiobook.IsCompleted)
-                    matchesProgressFilter = true;
-                if (_activeFilters.Contains(AudioBookFilter.NotStarted) && audiobook.Progress == 0 && !audiobook.IsCompleted)
-                    matchesProgressFilter = true;
-                if (_activeFilters.Contains(AudioBookFilter.Completed) && audiobook.IsCompleted)
-                    matchesProgressFilter = true;
-            }
-            else
-            {
-                matchesProgressFilter = true; // No progress filter active, so all pass
-            }
-
-            // Check tag filters
-            if (hasTagFilter)
-            {
-                // Audiobook must have at least one of the selected tags
-                matchesTagFilter = audiobook.Model.Tags.Any(tag => 
-                    ViewModel.SelectedTags.Any(selectedTag => 
-                        selectedTag.Id == tag.Id));
-            }
-            else
-            {
-                matchesTagFilter = true; // No tag filter active, so all pass
-            }
-
-            // Audiobook must match both filter types (if active)
-            if (matchesProgressFilter && matchesTagFilter)
-            {
-                matches.Add(audiobook);
-            }
-        }
-
-        return matches;
+        await ApplyFiltersAsync();
     }
 
     /// <summary>
-    ///     Filters the audiobook list based on the search text.
+    ///     Single unified filter: applies progress, tag (OR), and search-text filters together
+    ///     from the master AudiobooksForFilter list, then updates ViewModel.Audiobooks.
     /// </summary>
-    private async Task FilterAudiobookList()
+    private async Task ApplyFiltersAsync()
     {
-        if (_activeFilters.Count == 0 && ViewModel.SelectedTags.Count == 0)
+        var searchText = ViewModel.SearchText;
+        var hasTagFilter = ViewModel.SelectedTags.Count > 0;
+        var hasProgressFilter = _activeFilters.Count > 0;
+        var hasSearch = !string.IsNullOrEmpty(searchText);
+
+        IEnumerable<AudiobookViewModel> source = ViewModel.AudiobooksForFilter;
+
+        if (hasProgressFilter)
         {
-            await ResetAudiobookListAsync();
-            return;
+            source = source.Where(a =>
+                (_activeFilters.Contains(AudioBookFilter.InProgress) && a.Progress > 2 && !a.IsCompleted) ||
+                (_activeFilters.Contains(AudioBookFilter.NotStarted) && a.Progress == 0 && !a.IsCompleted) ||
+                (_activeFilters.Contains(AudioBookFilter.Completed) && a.IsCompleted));
         }
 
-        var matches = GetFilteredAudiobooks();
+        if (hasTagFilter)
+        {
+            source = source.Where(a =>
+                a.Model.Tags.Any(t => ViewModel.SelectedTags.Any(s => s.Id == t.Id)));
+        }
+
+        List<AudiobookViewModel> results;
+        if (hasSearch)
+        {
+            var terms = searchText.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+            var scored = source
+                .Select(a => new
+                {
+                    Audiobook = a,
+                    Score = terms.Count(term =>
+                        a.Title.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        a.Author.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(a.Description) &&
+                         a.Description.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                })
+                .Where(x => x.Score > 0)
+                .OrderByDescending(x => x.Score)
+                .ToList();
+
+            var exactMatches = scored
+                .Where(x =>
+                    x.Audiobook.Title.Equals(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    x.Audiobook.Author.Equals(searchText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            results = (exactMatches.Count > 0 ? exactMatches : scored).Select(x => x.Audiobook).ToList();
+        }
+        else
+        {
+            results = source.ToList();
+        }
 
         await _dispatcherQueue.EnqueueAsync(() =>
         {
             ViewModel.Audiobooks.Clear();
-            foreach (var match in matches) ViewModel.Audiobooks.Add(match);
+            foreach (var a in results) ViewModel.Audiobooks.Add(a);
         });
     }
 
@@ -266,7 +260,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Add(AudioBookFilter.InProgress);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void NotStartedFilterCheckBox_OnChecked(object sender, RoutedEventArgs e)
@@ -275,7 +269,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Add(AudioBookFilter.NotStarted);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void CompletedFilterCheckBox_OnChecked(object sender, RoutedEventArgs e)
@@ -284,7 +278,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Add(AudioBookFilter.Completed);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void InProgressFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
@@ -293,7 +287,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Remove(AudioBookFilter.InProgress);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void NotStartedFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
@@ -302,7 +296,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Remove(AudioBookFilter.NotStarted);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void CompletedFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
@@ -311,7 +305,7 @@ public sealed partial class LibraryCardPage : Page
 
         _activeFilters.Remove(AudioBookFilter.Completed);
 
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
     private async void SelectAllFiltersCheckBox_OnChecked(object sender, RoutedEventArgs e)
@@ -562,136 +556,108 @@ public sealed partial class LibraryCardPage : Page
     {
         ViewModel.SelectedTagsChanged -= ViewModelOnSelectedTagsChanged;
         ViewModel.ClearSearchText -= ViewModelOnClearSearchText;
+        ViewModel.AvailableTagsReloaded -= ViewModelOnAvailableTagsReloaded;
     }
 
     private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
     {
-        await FilterAudiobookList();
+        await ApplyFiltersAsync();
     }
 
-    #region Search functionality
-
-    private void AudiobookSearchBox_Loaded(object sender, RoutedEventArgs e)
+    private async void ViewModelOnAvailableTagsReloaded(object? sender, EventArgs e)
     {
-        if (AudiobookSearchBox == null) return;
-        AudiobookSearchBox.QuerySubmitted += AudiobookSearchBox_QuerySubmitted;
-        AudiobookSearchBox.TextChanged += AudiobookSearchBox_TextChanged;
+        await ApplyFiltersAsync();
     }
+
+    #region Search / Token functionality
 
     /// <summary>
-    ///     Filters or resets the audiobook list based on the search text.
+    ///     Prevent a typed string from becoming a token unless it exactly matches a tag name.
+    ///     Free-text stays in the box as search text; only known tags can be tokens.
     /// </summary>
-    private async void AudiobookSearchBox_QuerySubmitted(AutoSuggestBox sender,
-        AutoSuggestBoxQuerySubmittedEventArgs args)
+    private void AudiobookSearchBox_TokenItemAdding(TokenizingTextBox sender, TokenItemAddingEventArgs args)
     {
-        if (string.IsNullOrEmpty(args.QueryText))
+        // Already a Tag object (e.g. added programmatically) — allow through.
+        if (args.Item is Tag) return;
+
+        // Try to match the typed text to a known available tag.
+        var text = args.TokenText;
+        var match = ViewModel.AvailableTags.FirstOrDefault(t =>
+            t.Name.Equals(text, StringComparison.OrdinalIgnoreCase));
+
+        if (match != null && !ViewModel.SelectedTags.Any(s => s.Id == match.Id))
         {
-            await ClearSearchAndTagFilters();
+            args.Item = match;
         }
         else
         {
-            await FilterAudiobookListBySearch(args.QueryText);
+            // Not a tag — cancel the token. Restore the text on the next dispatch
+            // because the control clears the inner text box after this event.
+            args.Cancel = true;
+            var restore = text;
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                if (AudiobookSearchBox != null && string.IsNullOrEmpty(AudiobookSearchBox.Text))
+                    AudiobookSearchBox.Text = restore;
+            });
         }
     }
 
+    private async void AudiobookSearchBox_TokenItemAdded(TokenizingTextBox sender, object args)
+    {
+        // A tag token was added (from nav pane or matched text) — re-filter.
+        ViewModel.NotifySelectedTagsChanged();
+        await ApplyFiltersAsync();
+    }
+
+    private async void AudiobookSearchBox_TokenItemRemoved(TokenizingTextBox sender, object args)
+    {
+        // A tag token was removed (user clicked ✕) — sync nav pane and re-filter.
+        ViewModel.NotifySelectedTagsChanged();
+        await ApplyFiltersAsync();
+    }
+
     /// <summary>
-    ///     Updates the search box items source when the user changes the search text.
+    ///     Updates search text and suggestions as the user types.
     /// </summary>
     private async void AudiobookSearchBox_TextChanged(AutoSuggestBox sender,
         AutoSuggestBoxTextChangedEventArgs args)
     {
-        // We only want to get results when it was a user typing,
-        // otherwise we assume the value got filled in by TextMemberPath
-        // or the handler for SuggestionChosen.
-        if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
+        if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+
+        ViewModel.SearchText = sender.Text;
+
+        if (string.IsNullOrEmpty(sender.Text))
         {
-            // If no search query is entered, refresh the complete list.
-            if (string.IsNullOrEmpty(sender.Text))
-            {
-                await ClearSearchAndTagFilters();
-                sender.ItemsSource = null;
-            }
-            else
-            {
-                sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
-                await FilterAudiobookListBySearch(sender.Text);
-            }
+            sender.ItemsSource = null;
         }
-    }
-
-    /// <summary>
-    ///     Clears the search text and all tag filters, then reloads the full audiobook list.
-    /// </summary>
-    private async Task ClearSearchAndTagFilters()
-    {
-        // Clear tag filters in the ViewModel
-        ViewModel.SelectedTags.Clear();
-        
-        // Clear tag selection UI in AppShell
-        ViewModel.NotifyClearTagSelection();
-        
-        // Notify that selected tags have changed so filtering updates
-        ViewModel.NotifySelectedTagsChanged();
-        
-        // Reload the full audiobook list
-        await _dispatcherQueue.EnqueueAsync(async () =>
-            await ViewModel.GetAudiobookListAsync());
-    }
-
-    private List<AudiobookViewModel> GetFilteredAudiobooksBySearch(string text)
-    {
-        var parameters = text.Split([' '],
-            StringSplitOptions.RemoveEmptyEntries);
-
-        var matches = ViewModel.Audiobooks
-            .Select(audiobook => new
-            {
-                Audiobook = audiobook,
-                Score = parameters.Count(parameter =>
-                    audiobook.Author.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
-                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(audiobook.Description) &&
-                     audiobook.Description.Contains(parameter, StringComparison.OrdinalIgnoreCase)))
-            })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Audiobook)
-            .ToList();
-
-        var exactMatches = matches.Where(audiobook =>
-            audiobook.Author.Equals(text, StringComparison.OrdinalIgnoreCase) ||
-            audiobook.Title.Equals(text, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(audiobook.Description) &&
-             audiobook.Description.Equals(text, StringComparison.OrdinalIgnoreCase))).ToList();
-
-        return exactMatches.Count != 0 ? exactMatches : matches;
-    }
-
-    /// <summary>
-    ///     Filters the audiobook list based on the search text.
-    /// </summary>
-    private async Task FilterAudiobookListBySearch(string text)
-    {
-        var matches = GetFilteredAudiobooksBySearch(text);
-
-        await _dispatcherQueue.EnqueueAsync(() =>
+        else
         {
-            ViewModel.Audiobooks.Clear();
-            foreach (var match in matches) ViewModel.Audiobooks.Add(match);
-        });
+            sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
+        }
+
+        await ApplyFiltersAsync();
+    }
+
+    /// <summary>
+    ///     Handles Enter / suggestion selection in the search box.
+    /// </summary>
+    private async void AudiobookSearchBox_QuerySubmitted(AutoSuggestBox sender,
+        AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        var text = args.ChosenSuggestion as string ?? args.QueryText;
+        ViewModel.SearchText = text;
+        await ApplyFiltersAsync();
     }
 
     private List<string> GetAudiobookTitles(string text)
     {
-        var parameters = text.Split([' '],
-            StringSplitOptions.RemoveEmptyEntries);
-        var titles = new List<string>();
-        return ViewModel.Audiobooks
-            .Select(audiobook => new
+        var parameters = text.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+        return ViewModel.AudiobooksForFilter
+            .Select(a => new
             {
-                audiobook.Title,
-                Score = parameters.Count(parameter =>
-                    audiobook.Title.Contains(parameter, StringComparison.OrdinalIgnoreCase))
+                a.Title,
+                Score = parameters.Count(p => a.Title.Contains(p, StringComparison.OrdinalIgnoreCase))
             })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -701,15 +667,12 @@ public sealed partial class LibraryCardPage : Page
 
     private List<string> GetAudiobookAuthors(string text)
     {
-        var parameters = text.Split([' '],
-            StringSplitOptions.RemoveEmptyEntries);
-
-        return ViewModel.Audiobooks
-            .Select(audiobook => new
+        var parameters = text.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+        return ViewModel.AudiobooksForFilter
+            .Select(a => new
             {
-                audiobook.Author,
-                Score = parameters.Count(parameter =>
-                    audiobook.Author.Contains(parameter, StringComparison.OrdinalIgnoreCase))
+                a.Author,
+                Score = parameters.Count(p => a.Author.Contains(p, StringComparison.OrdinalIgnoreCase))
             })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -718,12 +681,12 @@ public sealed partial class LibraryCardPage : Page
             .ToList();
     }
 
-    private void ViewModelOnClearSearchText()
+    private async void ViewModelOnClearSearchText()
     {
+        ViewModel.SearchText = string.Empty;
         if (AudiobookSearchBox != null)
-        {
             AudiobookSearchBox.Text = string.Empty;
-        }
+        await ApplyFiltersAsync();
     }
 
     #endregion
