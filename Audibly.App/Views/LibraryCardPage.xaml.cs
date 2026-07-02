@@ -56,6 +56,7 @@ public sealed partial class LibraryCardPage : Page
 
     private readonly HashSet<AudioBookFilter> _activeFilters = new();
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    private bool _suppressNextTextClear;
 
     public LibraryCardPage()
     {
@@ -577,22 +578,25 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     private void AudiobookSearchBox_TokenItemAdding(TokenizingTextBox sender, TokenItemAddingEventArgs args)
     {
-        // Already a Tag object (e.g. added programmatically) — allow through.
-        if (args.Item is Tag) return;
+        if (args.Item is Tag)
+        {
+            // Programmatic token from ItemsSource — if the control clears the inner text
+            // box as a side effect, don't wipe the user's search term.
+            _suppressNextTextClear = true;
+            return;
+        }
 
-        // Try to match the typed text to a known available tag.
         var text = args.TokenText;
         var match = ViewModel.AvailableTags.FirstOrDefault(t =>
             t.Name.Equals(text, StringComparison.OrdinalIgnoreCase));
 
         if (match != null && !ViewModel.SelectedTags.Any(s => s.Id == match.Id))
         {
+            // User typed a tag name — convert to token; the typed text IS the token so let it clear.
             args.Item = match;
         }
         else
         {
-            // Not a tag — cancel the token. Restore the text on the next dispatch
-            // because the control clears the inner text box after this event.
             args.Cancel = true;
             var restore = text;
             _dispatcherQueue.TryEnqueue(() =>
@@ -605,15 +609,19 @@ public sealed partial class LibraryCardPage : Page
 
     private async void AudiobookSearchBox_TokenItemAdded(TokenizingTextBox sender, object args)
     {
-        // A tag token was added (from nav pane or matched text) — re-filter.
-        ViewModel.NotifySelectedTagsChanged();
+        _suppressNextTextClear = false;
+
+        // If the control wiped the inner text during a programmatic token add but SearchText
+        // still has a value, restore the visual text so the search term remains visible.
+        if (!string.IsNullOrEmpty(ViewModel.SearchText) && string.IsNullOrEmpty(sender.Text))
+            sender.Text = ViewModel.SearchText;
+
         await ApplyFiltersAsync();
     }
 
     private async void AudiobookSearchBox_TokenItemRemoved(TokenizingTextBox sender, object args)
     {
-        // A tag token was removed (user clicked ✕) — sync nav pane and re-filter.
-        ViewModel.NotifySelectedTagsChanged();
+        // AppShell syncs the nav-pane ListView via SelectedTagsOnCollectionChanged.
         await ApplyFiltersAsync();
     }
 
@@ -625,16 +633,22 @@ public sealed partial class LibraryCardPage : Page
     {
         if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
 
+        if (string.IsNullOrEmpty(sender.Text) && _suppressNextTextClear)
+        {
+            // Control cleared the inner text box because a programmatic token was added —
+            // don't wipe the user's search term.
+            _suppressNextTextClear = false;
+            await ApplyFiltersAsync();
+            return;
+        }
+
+        _suppressNextTextClear = false;
         ViewModel.SearchText = sender.Text;
 
         if (string.IsNullOrEmpty(sender.Text))
-        {
             sender.ItemsSource = null;
-        }
         else
-        {
             sender.ItemsSource = GetAudiobookTitles(sender.Text).Concat(GetAudiobookAuthors(sender.Text));
-        }
 
         await ApplyFiltersAsync();
     }
