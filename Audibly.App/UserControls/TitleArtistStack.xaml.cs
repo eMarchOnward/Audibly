@@ -28,6 +28,9 @@ public sealed partial class TitleArtistStack : UserControl
     public static readonly DependencyProperty ShowChapterTitleProperty = DependencyProperty.Register(
         nameof(ShowChapterTitle), typeof(bool), typeof(TitleArtistStack), new PropertyMetadata(false));
 
+    public static readonly DependencyProperty ShowPlaybackSpeedProperty = DependencyProperty.Register(
+        nameof(ShowPlaybackSpeed), typeof(bool), typeof(TitleArtistStack), new PropertyMetadata(false));
+
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
     private bool _isPointerOver;
@@ -72,6 +75,12 @@ public sealed partial class TitleArtistStack : UserControl
     {
         get => (bool)GetValue(ShowChapterTitleProperty);
         set => SetValue(ShowChapterTitleProperty, value);
+    }
+
+    public bool ShowPlaybackSpeed
+    {
+        get => (bool)GetValue(ShowPlaybackSpeedProperty);
+        set => SetValue(ShowPlaybackSpeedProperty, value);
     }
 
     private async void TitleMarqueeText_MarqueeCompleted(object? sender, EventArgs e)

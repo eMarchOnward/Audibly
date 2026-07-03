@@ -37,6 +37,14 @@
             TextWrapping="NoWrap"
             x:Name="ArtistTextBlock" />
 
+        <!--  Playback Speed  -->
+        <TextBlock
+            FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="{x:Bind PlayerViewModel.PlaybackSpeedText, Mode=OneWay}"
+            Visibility="{x:Bind ShowPlaybackSpeed, Mode=OneWay}"
+            x:Name="PlaybackSpeedTextBlock" />
+
         <TextBlock
             FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
             FontStyle="Italic"

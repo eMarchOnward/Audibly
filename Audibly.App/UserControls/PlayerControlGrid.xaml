@@ -86,7 +86,7 @@
                     Orientation="Horizontal"
                     VerticalAlignment="Top">
 
-                    <local:TitleArtistStack TitleMaxWidth="230" />
+                    <local:TitleArtistStack TitleMaxWidth="230" ShowPlaybackSpeed="True" />
 
                     <!--  separator and chapter selection  -->
                     <StackPanel Orientation="Horizontal">

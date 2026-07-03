@@ -368,25 +368,25 @@ public sealed partial class PlayerControlGrid : UserControl
     }
 
     // Public API used by AppShell to adjust speed via '[' and ']'
-    public void IncreasePlaybackSpeed()
+    public void IncreasePlaybackSpeed(bool showFlyout = true)
     {
-        ShowPlaybackSpeedFlyout();
+        if (showFlyout) ShowPlaybackSpeedFlyout();
         var newValue = PlaybackSpeedSlider.Value + Constants.PlaybackSpeedIncrement;
         if (newValue >= Constants.PlaybackSpeedMaximum) newValue = Constants.PlaybackSpeedMaximum;
         PlaybackSpeedSlider.Value = newValue;
     }
 
-    public void DecreasePlaybackSpeed()
+    public void DecreasePlaybackSpeed(bool showFlyout = true)
     {
-        ShowPlaybackSpeedFlyout();
+        if (showFlyout) ShowPlaybackSpeedFlyout();
         var newValue = PlaybackSpeedSlider.Value - Constants.PlaybackSpeedIncrement;
         if (newValue <= Constants.PlaybackSpeedMinimum) newValue = Constants.PlaybackSpeedMinimum;
         PlaybackSpeedSlider.Value = newValue;
     }
 
-    public void ResetPlaybackSpeed()
+    public void ResetPlaybackSpeed(bool showFlyout = true)
     {
-        ShowPlaybackSpeedFlyout();
+        if (showFlyout) ShowPlaybackSpeedFlyout();
         PlaybackSpeedSlider.Value = Constants.PlaybackSpeedDefault;
     }
 
@@ -450,32 +450,27 @@ public sealed partial class PlayerControlGrid : UserControl
         var key = e.Key;
         if (key == (VirtualKey)219) // Open bracket '['
         {
-            DecreasePlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
+            DecreasePlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
         else if (key == (VirtualKey)221) // Close bracket ']'
         {
-            IncreasePlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
+            IncreasePlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
         else if (key == (VirtualKey)0xDC) // Backslash '\\'
         {
-            ResetPlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
+            ResetPlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
         else if (key == VirtualKey.Up) // Increase speed with Up arrow
         {
-            IncreasePlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
+            IncreasePlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
         else if (key == VirtualKey.Down) // Decrease speed with Down arrow
         {
-            DecreasePlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
+            DecreasePlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
         else if (key == VirtualKey.Space)

@@ -107,31 +107,26 @@ public sealed partial class NewMiniPlayerPage : Page
         if (key == (VirtualKey)219) // Open bracket '['
         {
             HandleSpeedDecrease();
-            ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
         else if (key == (VirtualKey)221) // Close bracket ']'
         {
             HandleSpeedIncrease();
-            ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
         else if (key == (VirtualKey)0xDC) // Backslash '\\'
         {
             ResetPlaybackSpeed();
-            ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
         else if (key == VirtualKey.Up) // Increase speed with Up arrow
         {
             HandleSpeedIncrease();
-            ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
         else if (key == VirtualKey.Down) // Decrease speed with Down arrow
         {
             HandleSpeedDecrease();
-            ClosePlaybackSpeedFlyout();
             args.Handled = true;
         }
         else if (key == VirtualKey.Space)
@@ -225,13 +220,11 @@ public sealed partial class NewMiniPlayerPage : Page
 
     private void ResetPlaybackSpeed()
     {
-        PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
         PlaybackSpeedSlider.Value = AppConstants.PlaybackSpeedDefault;
     }
 
     private void HandleSpeedIncrease()
     {
-        PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
         var newValue = PlaybackSpeedSlider.Value + AppConstants.PlaybackSpeedIncrement;
         if (newValue >= AppConstants.PlaybackSpeedMaximum) newValue = AppConstants.PlaybackSpeedMaximum;
         PlaybackSpeedSlider.Value = newValue;
@@ -239,7 +232,6 @@ public sealed partial class NewMiniPlayerPage : Page
 
     private void HandleSpeedDecrease()
     {
-        PlaybackSpeedSliderFlyout.ShowAt(PlaybackSpeedButton);
         var newValue = PlaybackSpeedSlider.Value - AppConstants.PlaybackSpeedIncrement;
         if (newValue <= AppConstants.PlaybackSpeedMinimum) newValue = AppConstants.PlaybackSpeedMinimum;
         PlaybackSpeedSlider.Value = newValue;
@@ -359,7 +351,7 @@ public sealed partial class NewMiniPlayerPage : Page
                 {
                     _dispatcherQueue.TryEnqueue(() =>
                     {
-                        try { HandleSpeedIncrease(); ClosePlaybackSpeedFlyout();  }
+                        try { HandleSpeedIncrease(); }
                         catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
                     });
                 },
@@ -367,7 +359,7 @@ public sealed partial class NewMiniPlayerPage : Page
                 {
                     _dispatcherQueue.TryEnqueue(() =>
                     {
-                        try { HandleSpeedDecrease(); ClosePlaybackSpeedFlyout();  }
+                        try { HandleSpeedDecrease(); }
                         catch (Exception ex) { App.ViewModel.LoggingService?.LogError(ex, true); }
                     });
                 },

@@ -131,8 +131,14 @@ public class PlayerViewModel : BindableBase, IDisposable
     public double PlaybackSpeed
     {
         get => _playbackSpeed;
-        set => Set(ref _playbackSpeed, value);
+        set
+        {
+            Set(ref _playbackSpeed, value);
+            OnPropertyChanged(nameof(PlaybackSpeedText));
+        }
     }
+
+    public string PlaybackSpeedText => $"{PlaybackSpeed:F2}x";
 
     /// <summary>
     ///     Gets or sets the chapter duration text.

@@ -91,7 +91,7 @@
                 Grid.Column="2"
                 HorizontalAlignment="Center"
                 Margin="8,0,0,0"
-                ShowChapterTitle="True"
+                ShowPlaybackSpeed="True"
                 Spacing="4"
                 TitleFontSize="16"
                 TitleMaxWidth="125"
