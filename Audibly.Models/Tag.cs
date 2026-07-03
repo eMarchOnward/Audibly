@@ -1,4 +1,4 @@
-// Author: rstewa · https://github.com/rstewa
+// Author: rstewa ï¿½ https://github.com/rstewa
 // Created: 01/07/2025
 // Updated: 01/07/2025
 
@@ -42,4 +42,6 @@ public class Tag : DbObject, IEquatable<Tag>
     {
         return NormalizedName?.ToLowerInvariant().GetHashCode() ?? 0;
     }
+
+    public override string ToString() => Name;
 }

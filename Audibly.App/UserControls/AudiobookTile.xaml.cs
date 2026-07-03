@@ -13,6 +13,7 @@ using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.Models;
 using CommunityToolkit.WinUI;
+using CommunityToolkit.WinUI.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -443,11 +444,15 @@ public sealed partial class AudiobookTile : UserControl
         if (audiobook == null) return;
         ViewModel.SelectedAudiobook = audiobook;
 
-        // Load all existing tags from the database for suggestions
         var allTags = await App.Repository.Audiobooks.GetAllTagsAsync();
-        var tagSuggestions = allTags.Select(t => t.Name).ToList();
 
-        // Build dialog content inline
+        // Working copy – fresh Tag instances so EF tracking on the original list is unaffected
+        var pendingTags = new ObservableCollection<Tag>(audiobook.Model.Tags.Select(t => new Tag
+        {
+            Name = t.Name,
+            NormalizedName = t.NormalizedName
+        }));
+
         var thumbnail = new Image
         {
             Width = 96,
@@ -483,62 +488,100 @@ public sealed partial class AudiobookTile : UserControl
             UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
         });
 
-        // Tags auto-suggest box - load current tags as comma-separated string
-        var tagsText = TagsToCommaSeparatedString(audiobook.Model.Tags);
-        var tagsBox = new AutoSuggestBox 
-        { 
-            Header = "Tags (comma-separated)", 
-            PlaceholderText = "e.g., fiction, mystery, thriller",
-            Text = tagsText
+        // Tags – TokenizingTextBox bound to pendingTags so chips appear immediately
+        var tagsBox = new TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or use commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingTags,
+            TextMemberPath = "Name"
         };
 
-        // Handle text changes to provide suggestions
-        tagsBox.TextChanged += (s, args) =>
+        tagsBox.TokenItemAdding += (_, args) =>
         {
-            if (args.Reason == AutoSuggestionBoxTextChangeReason.UserInput)
-            {
-                var text = tagsBox.Text;
-                
-                // Get the text after the last comma (the current tag being typed)
-                var lastCommaIndex = text.LastIndexOf(',');
-                var currentTag = lastCommaIndex >= 0 
-                    ? text.Substring(lastCommaIndex + 1).Trim() 
-                    : text.Trim();
+            if (args.Item is Tag) return; // programmatic add via ObservableCollection
 
-                if (string.IsNullOrWhiteSpace(currentTag))
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+
+            var normalizedName = NormalizeTagName(text);
+            if (string.IsNullOrEmpty(normalizedName)) { args.Cancel = true; return; }
+
+            if (pendingTags.Any(t => t.NormalizedName == normalizedName)) { args.Cancel = true; return; }
+
+            // Reuse the existing DB tag if it matches, otherwise create a new one
+            var existing = allTags.FirstOrDefault(t => t.NormalizedName == normalizedName);
+            args.Item = existing ?? new Tag { Name = text, NormalizedName = normalizedName };
+        };
+
+        // Available-tags picker: one button per existing tag not already on this audiobook
+        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
+        var tagsSection = new StackPanel { Spacing = 4 };
+
+        if (allTags.Any())
+        {
+            tagsSection.Children.Add(new TextBlock
+            {
+                Text = "Available Tags",
+                Margin = new Thickness(0, 0, 0, 2),
+                Style = sectionLabelStyle
+            });
+
+            // Map NormalizedName → Button so CollectionChanged can toggle visibility
+            var tagButtons = new Dictionary<string, Button>();
+            var tagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            foreach (var tag in allTags.OrderBy(t => t.Name))
+            {
+                var capturedTag = tag;
+                var alreadyAdded = pendingTags.Any(t => t.NormalizedName == tag.NormalizedName);
+                var addBtn = new Button
                 {
-                    tagsBox.ItemsSource = null;
-                    return;
-                }
-
-                // Filter existing tags that match the current input
-                var suggestions = tagSuggestions
-                    .Where(t => t.Contains(currentTag, StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(t => t)
-                    .ToList();
-
-                tagsBox.ItemsSource = suggestions;
+                    Content = "+ " + tag.Name,
+                    Padding = new Thickness(8, 4, 8, 4),
+                    FontSize = 12,
+                    Visibility = alreadyAdded ? Visibility.Collapsed : Visibility.Visible
+                };
+                addBtn.Click += (btnSender, btnArgs) =>
+                {
+                    if (!pendingTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingTags.Add(capturedTag);
+                };
+                tagButtons[tag.NormalizedName] = addBtn;
+                tagStrip.Children.Add(addBtn);
             }
-        };
 
-        // Handle suggestion chosen
-        tagsBox.SuggestionChosen += (s, args) =>
-        {
-            var text = tagsBox.Text;
-            var lastCommaIndex = text.LastIndexOf(',');
-            
-            if (lastCommaIndex >= 0)
+            // Keep Available Tags and token box in sync as the user adds/removes tags
+            pendingTags.CollectionChanged += (_, args) =>
             {
-                // Replace the current tag being typed with the chosen suggestion
-                var prefix = text.Substring(0, lastCommaIndex + 1).TrimEnd();
-                tagsBox.Text = prefix + " " + args.SelectedItem.ToString();
-            }
-            else
+                if (args.NewItems != null)
+                    foreach (Tag added in args.NewItems)
+                        if (tagButtons.TryGetValue(added.NormalizedName, out var btn))
+                            btn.Visibility = Visibility.Collapsed;
+
+                if (args.OldItems != null)
+                    foreach (Tag removed in args.OldItems)
+                        if (tagButtons.TryGetValue(removed.NormalizedName, out var btn))
+                            btn.Visibility = Visibility.Visible;
+            };
+
+            tagsSection.Children.Add(new ScrollViewer
             {
-                // No comma, just replace the entire text
-                tagsBox.Text = args.SelectedItem.ToString();
-            }
-        };
+                Content = tagStrip,
+                HorizontalScrollMode = ScrollMode.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollMode = ScrollMode.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
+            });
+
+            tagsSection.Children.Add(new TextBlock
+            {
+                Text = "Tags",
+                Margin = new Thickness(0, 4, 0, 2),
+                Style = sectionLabelStyle
+            });
+        }
+
+        tagsSection.Children.Add(tagsBox);
 
         var descBox = new TextBox { Header = "Description", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
         descBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
@@ -568,7 +611,7 @@ public sealed partial class AudiobookTile : UserControl
             MinWidth = 400
         };
         panel.Children.Add(grid);
-        panel.Children.Add(tagsBox);
+        panel.Children.Add(tagsSection);
         panel.Children.Add(descBox);
         panel.DataContext = ViewModel;
 
@@ -586,42 +629,34 @@ public sealed partial class AudiobookTile : UserControl
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            // Sanitize the values already in the model (bindings already updated them)
-            var newTitle = SanitizeForSqlite(audiobook.Model.Title);
-            var newAuthor = SanitizeForSqlite(audiobook.Model.Author);
-            var newNarrator = SanitizeForSqlite(audiobook.Model.Composer);
-            var newDescription = SanitizeForSqlite(audiobook.Model.Description);
+            audiobook.Model.Title = SanitizeForSqlite(audiobook.Model.Title);
+            audiobook.Model.Author = SanitizeForSqlite(audiobook.Model.Author);
+            audiobook.Model.Composer = SanitizeForSqlite(audiobook.Model.Composer);
+            audiobook.Model.Description = SanitizeForSqlite(audiobook.Model.Description);
 
-            // Apply sanitized values back to model
-            audiobook.Model.Title = newTitle;
-            audiobook.Model.Author = newAuthor;
-            audiobook.Model.Composer = newNarrator;
-            audiobook.Model.Description = newDescription;
+            // Parse any uncommitted free text still in the tags box (comma-separated)
+            var remainingText = tagsBox.Text?.Trim() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(remainingText))
+            {
+                foreach (var t in ParseTagsFromText(remainingText))
+                {
+                    if (!pendingTags.Any(x => x.NormalizedName == t.NormalizedName))
+                        pendingTags.Add(t);
+                }
+            }
 
-            // Parse and update tags - create fresh instances without tracking
-            var newTags = ParseTagsFromText(tagsBox.Text);
-            
-            // Replace the entire Tags list to avoid EF tracking issues
-            audiobook.Model.Tags = newTags;
-
-            // Mark the audiobook as modified so SaveAsync will actually save
+            audiobook.Model.Tags = pendingTags.ToList();
             audiobook.IsModified = true;
-            
-            // Persist
+
             await audiobook.SaveAsync();
-            
-            // Clean up orphaned tags (tags with no audiobooks)
             await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
-            
             audiobook.RefreshCoverImage();
 
-            // Refresh Library view so updated metadata appears
             await _dispatcherQueue.EnqueueAsync(async () =>
             {
                 await ViewModel.GetAudiobookListAsync();
             });
 
-            // If the edited audiobook is currently playing, update NowPlaying metadata
             var now = PlayerViewModel.NowPlaying;
             if (now != null && now.Id == audiobook.Id)
             {
