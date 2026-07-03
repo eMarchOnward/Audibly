@@ -15,6 +15,7 @@ using Audibly.Models;
 using CommunityToolkit.WinUI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
@@ -31,6 +32,7 @@ public sealed partial class AppShell : Page
 {
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private bool _isSyncingTagSelection;
+    private Tag? _rightClickedTag;
 
     public readonly string LibraryLabel = "Library";
     public readonly string NowPlayingLabel = "Now Playing";
@@ -315,6 +317,89 @@ public sealed partial class AppShell : Page
         ViewModel.ClearSelectedTags();
         // ListView sync is handled by SelectedTagsOnCollectionChanged
         ViewModel.NotifySelectedTagsChanged();
+    }
+
+    private void TagItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (TagsListView.SelectedItems.Count > 1) return;
+        if (sender is not FrameworkElement element) return;
+
+        // Walk up the visual tree to the ListViewItem to get the Tag data
+        DependencyObject? current = element;
+        while (current is not null and not ListViewItem)
+            current = VisualTreeHelper.GetParent(current);
+
+        if (current is not ListViewItem { Content: Tag tag }) return;
+
+        _rightClickedTag = tag;
+        var flyout = (MenuFlyout)Resources["TagContextMenu"];
+        flyout.ShowAt(element, new FlyoutShowOptions { Position = e.GetPosition(element) });
+        e.Handled = true;
+    }
+
+    private async void RenameTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (_rightClickedTag is null) return;
+
+        var textBox = new TextBox
+        {
+            Text = _rightClickedTag.Name,
+            PlaceholderText = "New tag name",
+            MinWidth = 260
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Rename Tag",
+            Content = textBox,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        var newName = textBox.Text.Trim();
+        if (string.IsNullOrEmpty(newName) || newName == _rightClickedTag.Name) return;
+
+        var normalizedNew = newName.ToLower();
+        var conflict = ViewModel.AvailableTags.FirstOrDefault(
+            t => t.NormalizedName == normalizedNew && t.Id != _rightClickedTag.Id);
+        if (conflict != null)
+        {
+            await new ContentDialog
+            {
+                Title = "Name Already Exists",
+                Content = $"A tag named \"{conflict.Name}\" already exists.",
+                CloseButtonText = "OK",
+                XamlRoot = XamlRoot
+            }.ShowAsync();
+            return;
+        }
+
+        await ViewModel.RenameTagAsync(_rightClickedTag, newName);
+    }
+
+    private async void RemoveTag_Click(object sender, RoutedEventArgs e)
+    {
+        if (_rightClickedTag is null) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Remove Tag",
+            Content = $"Remove \"{_rightClickedTag.Name}\"? This tag will be removed from all audiobooks.",
+            PrimaryButtonText = "Remove",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        await ViewModel.DeleteTagAsync(_rightClickedTag);
     }
 
     private void ViewModelOnClearTagSelection()

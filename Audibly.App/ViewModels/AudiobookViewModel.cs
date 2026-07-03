@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using Audibly.App.Extensions;
 using Audibly.Models;
@@ -17,6 +18,7 @@ namespace Audibly.App.ViewModels;
 public class AudiobookViewModel : BindableBase
 {
     private string _volumeGlyph;
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
 
     /// <summary>
     ///     Initializes a new instance of the CustomerViewModel class that wraps a Customer object.
@@ -71,16 +73,18 @@ public class AudiobookViewModel : BindableBase
     /// </summary>
     public async Task SaveAsync()
     {
-        // if (IsNewAudiobook)
-        // {
-        //     IsNewAudiobook = false;
-        //     App.ViewModel.Audiobooks.Add(this);
-        // }
+        await _saveLock.WaitAsync();
+        try
+        {
+            if (IsModified)
+                await App.Repository.Audiobooks.UpsertAsync(Model);
 
-        if (IsModified)
-            await App.Repository.Audiobooks.UpsertAsync(Model);
-
-        IsModified = false;
+            IsModified = false;
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
     }
 
     /// <summary>

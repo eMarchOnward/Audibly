@@ -175,11 +175,11 @@
                                 <ToggleMenuFlyoutItem
                                     x:Name="SortByDateImportedItem"
                                     Click="SortByDateImported_OnClick"
-                                    Text="Date imported (newest first)" />
+                                    Text="Date imported" />
                                 <ToggleMenuFlyoutItem
                                     x:Name="SortByLastPlayedItem"
                                     Click="SortByLastPlayed_OnClick"
-                                    Text="Last played (newest first)" />
+                                    Text="Last played" />
                             </MenuFlyout>
                         </AppBarButton.Flyout>
                     </AppBarButton>

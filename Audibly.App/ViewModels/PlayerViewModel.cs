@@ -38,6 +38,8 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private string _chapterPositionText = "0:00:00";
 
+    private string _chapterRemainingText = "0:00:00";
+
     private bool _isPlayerFullScreen;
     private bool _isTimerActive;
 
@@ -158,6 +160,12 @@ public class PlayerViewModel : BindableBase, IDisposable
         set => Set(ref _chapterPositionText, value);
     }
 
+    public string ChapterRemainingText
+    {
+        get => _chapterRemainingText;
+        set => Set(ref _chapterRemainingText, value);
+    }
+
     /// <summary>
     ///     Gets or sets the chapter position in milliseconds.
     /// </summary>
@@ -168,6 +176,7 @@ public class PlayerViewModel : BindableBase, IDisposable
         {
             Set(ref _chapterPositionMs, value);
             ChapterPositionText = _chapterPositionMs.ToStr_ms();
+            ChapterRemainingText = Math.Max(0L, _chapterDurationMs - _chapterPositionMs).ToStr_ms();
         }
     }
 
@@ -181,6 +190,7 @@ public class PlayerViewModel : BindableBase, IDisposable
         {
             Set(ref _chapterDurationMs, value);
             ChapterDurationText = _chapterDurationMs.ToStr_ms();
+            ChapterRemainingText = Math.Max(0L, _chapterDurationMs - _chapterPositionMs).ToStr_ms();
         }
     }
 
@@ -286,42 +296,62 @@ public class PlayerViewModel : BindableBase, IDisposable
             return;
 
         var timeSinceLastPlayed = DateTime.Now - NowPlaying.DateLastPlayed.Value;
-        
-        // Determine rewind amount based on time since last played
+
         TimeSpan rewindAmount = TimeSpan.Zero;
         if (timeSinceLastPlayed.TotalSeconds > 30 && timeSinceLastPlayed.TotalMinutes <= 10)
-        {
-            rewindAmount = TimeSpan.FromSeconds(4);
-        }
+            rewindAmount = TimeSpan.FromSeconds(UserSettings.RewindShortPauseSeconds);
         else if (timeSinceLastPlayed.TotalMinutes > 10)
-        {
-            rewindAmount = TimeSpan.FromSeconds(10);
-        }
+            rewindAmount = TimeSpan.FromSeconds(UserSettings.RewindLongPauseSeconds);
 
-        // No rewind needed if time since last played is less than 20 seconds
         if (rewindAmount == TimeSpan.Zero)
             return;
 
-        var currentPos = CurrentPosition;
-        var chapterStart = NowPlaying.CurrentChapter != null 
-            ? TimeSpan.FromMilliseconds(NowPlaying.CurrentChapter.StartTime)
-            : TimeSpan.Zero;
-        var tolerance = TimeSpan.FromSeconds(1);
+        const double toleranceMs = 1000.0;
+        var currentPosMs = CurrentPosition.TotalMilliseconds; // source-file-relative ms
 
-        // Don't rewind if we're at the start of a chapter
-        if (currentPos <= chapterStart + tolerance)
+        // Compute the absolute ms position of the start of the current source file
+        long sourceFileStartMs = 0;
+        for (var i = 0; i < NowPlaying.CurrentSourceFileIndex; i++)
+            sourceFileStartMs += (long)(NowPlaying.SourcePaths[i].Duration * 1000);
+        var currentAbsoluteMs = sourceFileStartMs + (long)currentPosMs;
+
+        // All chapters in the current source file
+        var chaptersInCurrentFile = NowPlaying.Chapters
+            .Where(c => c.ParentSourceFileIndex == NowPlaying.CurrentSourceFileIndex)
+            .ToList();
+
+        // Don't rewind if at or just past the start of any chapter (within tolerance)
+        if (chaptersInCurrentFile.Any(c => currentPosMs >= c.StartTime && currentPosMs - c.StartTime <= toleranceMs))
             return;
 
-        // Calculate new position, ensuring we don't go before chapter start or file start
-        var newPosition = currentPos - rewindAmount;
-        if (newPosition < chapterStart)
-            newPosition = chapterStart;
-        if (newPosition < TimeSpan.Zero)
-            newPosition = TimeSpan.Zero;
+        // Don't rewind if at a bookmark (within tolerance)
+        if (NowPlaying.Model.Bookmarks.Any(b => Math.Abs(b.PositionMs - currentAbsoluteMs) <= (long)toleranceMs))
+            return;
 
-        CurrentPosition = newPosition;
+        var targetPosMs = currentPosMs - rewindAmount.TotalMilliseconds;
+        var targetAbsoluteMs = currentAbsoluteMs - (long)rewindAmount.TotalMilliseconds;
 
-        // Update progress and save
+        // Find the latest chapter start strictly between the rewind target and current position
+        double? latestChapterStopMs = chaptersInCurrentFile
+            .Where(c => c.StartTime > targetPosMs && c.StartTime < currentPosMs)
+            .Select(c => (double?)c.StartTime)
+            .Max();
+
+        // Find the latest bookmark strictly between target and current, in source-file-relative ms
+        double? latestBookmarkStopMs = NowPlaying.Model.Bookmarks
+            .Where(b => b.PositionMs > targetAbsoluteMs && b.PositionMs < currentAbsoluteMs)
+            .Select(b => (double?)(b.PositionMs - sourceFileStartMs))
+            .Max();
+
+        // Snap to the latest boundary encountered (chapter or bookmark), or apply full rewind
+        double newPositionMs;
+        if (latestChapterStopMs.HasValue || latestBookmarkStopMs.HasValue)
+            newPositionMs = Math.Max(latestChapterStopMs ?? 0, latestBookmarkStopMs ?? 0);
+        else
+            newPositionMs = Math.Max(targetPosMs, 0);
+
+        CurrentPosition = TimeSpan.FromMilliseconds(newPositionMs);
+
         UpdateAudiobookProgress();
         NowPlaying.RefreshProgress();
         await NowPlaying.SaveAsync();

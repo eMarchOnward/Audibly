@@ -331,6 +331,52 @@ public static class UserSettings
         set => ApplicationData.Current.LocalSettings.Values["SkipForwardSeconds"] = value;
     }
 
+    public static int RewindShortPauseSeconds
+    {
+        get
+        {
+            try
+            {
+                var value = ApplicationData.Current.LocalSettings.Values["RewindShortPauseSeconds"];
+                if (value != null)
+                    if (int.TryParse(value.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["RewindShortPauseSeconds"] = 4;
+                return 4;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 4;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["RewindShortPauseSeconds"] = value;
+    }
+
+    public static int RewindLongPauseSeconds
+    {
+        get
+        {
+            try
+            {
+                var value = ApplicationData.Current.LocalSettings.Values["RewindLongPauseSeconds"];
+                if (value != null)
+                    if (int.TryParse(value.ToString(), out var result))
+                        return result;
+
+                ApplicationData.Current.LocalSettings.Values["RewindLongPauseSeconds"] = 10;
+                return 10;
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return 10;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["RewindLongPauseSeconds"] = value;
+    }
+
     public static bool ScaleSkipWithPlaybackSpeed
     {
         get

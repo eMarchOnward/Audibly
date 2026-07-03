@@ -1,4 +1,4 @@
-// Author: rstewa · https://github.com/rstewa
+// Author: rstewa ï¿½ https://github.com/rstewa
 // Created: 12/31/2025
 
 using System;
@@ -57,9 +57,10 @@ public class BookmarkService
         };
 
         var saved = await App.Repository.Bookmarks.UpsertAsync(bookmark);
-        if (saved != null && listToUpdate != null)
+        if (saved != null)
         {
-            InsertSorted(listToUpdate, saved);
+            nowPlaying.Model.Bookmarks.Add(saved);
+            if (listToUpdate != null) InsertSorted(listToUpdate, saved);
         }
 
         return saved;
@@ -74,12 +75,14 @@ public class BookmarkService
         {
             await App.Repository.Bookmarks.DeleteAsync(bookmark.Id);
             listToUpdate?.Remove(bookmark);
+            App.PlayerViewModel.NowPlaying?.Model.Bookmarks.Remove(bookmark);
             return true;
         }
         catch (DbUpdateConcurrencyException)
         {
             // Already deleted; ensure UI is updated
             listToUpdate?.Remove(bookmark);
+            App.PlayerViewModel.NowPlaying?.Model.Bookmarks.Remove(bookmark);
             return true;
         }
     }

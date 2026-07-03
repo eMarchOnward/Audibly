@@ -37,13 +37,25 @@
             TextWrapping="NoWrap"
             x:Name="ArtistTextBlock" />
 
-        <!--  Playback Speed  -->
-        <TextBlock
-            FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
-            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-            Text="{x:Bind PlayerViewModel.PlaybackSpeedText, Mode=OneWay}"
+        <!--  Playback Speed and Chapter Remaining  -->
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="4"
             Visibility="{x:Bind ShowPlaybackSpeed, Mode=OneWay}"
-            x:Name="PlaybackSpeedTextBlock" />
+            x:Name="PlaybackSpeedTextBlock">
+            <TextBlock
+                FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind PlayerViewModel.PlaybackSpeedText, Mode=OneWay}" />
+            <TextBlock
+                FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="|" />
+            <TextBlock
+                FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind PlayerViewModel.ChapterRemainingText, Mode=OneWay}" />
+        </StackPanel>
 
         <TextBlock
             FontSize="{x:Bind ArtistFontSize, Mode=OneWay}"

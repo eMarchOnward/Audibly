@@ -73,4 +73,14 @@ public interface IAudiobookRepository
     ///     Deletes the orphaned tags.
     /// </summary>
     Task DeleteOrphanedTagsAsync();
+
+    /// <summary>
+    ///     Renames a tag and updates its normalized name.
+    /// </summary>
+    Task RenameTagAsync(Guid tagId, string newName);
+
+    /// <summary>
+    ///     Deletes a tag and removes it from all audiobooks.
+    /// </summary>
+    Task DeleteTagAsync(Guid tagId);
 }

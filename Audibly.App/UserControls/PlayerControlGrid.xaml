@@ -363,7 +363,7 @@
                     <Button
                         BorderThickness="0"
                         Click="MaximizePlayerButton_OnClick"
-                        ToolTipService.ToolTip="Maximize Player"
+                        ToolTipService.ToolTip="Min/Max Player"
                         x:Name="MaximizeMinimizeButton"
                         IsTabStop="False">
                         <Button.KeyboardAccelerators>

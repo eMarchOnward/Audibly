@@ -367,5 +367,25 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
         }
     }
 
+    public async Task RenameTagAsync(Guid tagId, string newName)
+    {
+        var tag = await db.Tags.FirstOrDefaultAsync(t => t.Id == tagId);
+        if (tag is null) return;
+        tag.Name = newName;
+        tag.NormalizedName = newName.ToLower().Trim();
+        await db.SaveChangesAsync();
+    }
+
+    public async Task DeleteTagAsync(Guid tagId)
+    {
+        var tag = await db.Tags
+            .Include(t => t.Audiobooks)
+            .FirstOrDefaultAsync(t => t.Id == tagId);
+        if (tag is null) return;
+        tag.Audiobooks.Clear();
+        db.Tags.Remove(tag);
+        await db.SaveChangesAsync();
+    }
+
     #endregion
 }

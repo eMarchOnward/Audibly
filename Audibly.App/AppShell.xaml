@@ -15,6 +15,22 @@
     TabNavigation="Cycle"
     mc:Ignorable="d">
 
+    <Page.Resources>
+        <MenuFlyout x:Key="TagContextMenu">
+            <MenuFlyoutItem x:Name="RenameTagItem" Text="Rename" Click="RenameTag_Click">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE8AC;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem x:Name="RemoveTagItem" Text="Remove" Click="RemoveTag_Click">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE74D;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+        </MenuFlyout>
+    </Page.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -133,7 +149,7 @@
                                         </ListView.ItemContainerStyle>
                                         <ListView.ItemTemplate>
                                             <DataTemplate x:DataType="models:Tag">
-                                                <Grid HorizontalAlignment="Stretch">
+                                                <Grid HorizontalAlignment="Stretch" RightTapped="TagItem_RightTapped">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="3"/>
                                                         <ColumnDefinition Width="*"/>

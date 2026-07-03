@@ -189,12 +189,73 @@
                                     x:Name="skipForwardSecondsTextBox" />
                             </StackPanel>
                         </toolkit:SettingsCard>
-                        <toolkit:SettingsCard 
+                        <toolkit:SettingsCard
                             Description="When enabled, skip times will be multiplied by the current playback speed. For example, at 1.5x speed, a 10 second skip back becomes 15 seconds."
                             Header="Scale with playback speed">
-                            <ToggleSwitch 
+                            <ToggleSwitch
                                 IsOn="{x:Bind ViewModel.ScaleSkipWithPlaybackSpeed, Mode=TwoWay}"
                                 x:Name="scaleSkipToggle" />
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
+                <!--  Auto-Rewind settings  -->
+                <toolkit:SettingsExpander Description="Configure how far to rewind when resuming playback after a pause" Header="Auto-Rewind Settings">
+                    <toolkit:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE72C;" />
+                    </toolkit:SettingsExpander.HeaderIcon>
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard
+                            Description="Applied when resuming after a 30 second – 10 minute pause. Set to 0 to disable."
+                            Header="Short pause rewind (seconds)">
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <Slider
+                                    AutomationProperties.AutomationId="rewindShortPauseSlider"
+                                    LargeChange="5"
+                                    Maximum="30"
+                                    Minimum="0"
+                                    SmallChange="1"
+                                    SnapsTo="StepValues"
+                                    StepFrequency="1"
+                                    ToolTipService.ToolTip="Rewind amount for short pauses"
+                                    Value="{x:Bind ViewModel.RewindShortPauseSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="200"
+                                    x:Name="rewindShortPauseSlider" />
+                                <TextBox
+                                    HorizontalContentAlignment="Center"
+                                    IsReadOnly="True"
+                                    Text="{x:Bind ViewModel.RewindShortPauseSeconds, Mode=OneWay}"
+                                    TextAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Width="32"
+                                    x:Name="rewindShortPauseTextBox" />
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                        <toolkit:SettingsCard
+                            Description="Applied when resuming after more than a 10 minute pause. Set to 0 to disable."
+                            Header="Long pause rewind (seconds)">
+                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                <Slider
+                                    AutomationProperties.AutomationId="rewindLongPauseSlider"
+                                    LargeChange="5"
+                                    Maximum="60"
+                                    Minimum="0"
+                                    SmallChange="1"
+                                    SnapsTo="StepValues"
+                                    StepFrequency="1"
+                                    ToolTipService.ToolTip="Rewind amount for long pauses"
+                                    Value="{x:Bind ViewModel.RewindLongPauseSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    Width="200"
+                                    x:Name="rewindLongPauseSlider" />
+                                <TextBox
+                                    HorizontalContentAlignment="Center"
+                                    IsReadOnly="True"
+                                    Text="{x:Bind ViewModel.RewindLongPauseSeconds, Mode=OneWay}"
+                                    TextAlignment="Center"
+                                    VerticalContentAlignment="Center"
+                                    Width="32"
+                                    x:Name="rewindLongPauseTextBox" />
+                            </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>

@@ -218,6 +218,32 @@ public class MainViewModel : BindableBase
         }
     }
 
+    public int RewindShortPauseSeconds
+    {
+        get => UserSettings.RewindShortPauseSeconds;
+        set
+        {
+            if (UserSettings.RewindShortPauseSeconds != value)
+            {
+                UserSettings.RewindShortPauseSeconds = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public int RewindLongPauseSeconds
+    {
+        get => UserSettings.RewindLongPauseSeconds;
+        set
+        {
+            if (UserSettings.RewindLongPauseSeconds != value)
+            {
+                UserSettings.RewindLongPauseSeconds = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public bool ScaleSkipWithPlaybackSpeed
     {
         get => UserSettings.ScaleSkipWithPlaybackSpeed;
@@ -472,6 +498,14 @@ public class MainViewModel : BindableBase
                         SelectedTags.RemoveAt(i);
                 }
 
+                // Replace stale SelectedTags references so renames show in the search bar
+                for (var i = 0; i < SelectedTags.Count; i++)
+                {
+                    var fresh = AvailableTags.FirstOrDefault(t => t.Id == SelectedTags[i].Id);
+                    if (fresh != null && fresh.Name != SelectedTags[i].Name)
+                        SelectedTags[i] = fresh;
+                }
+
                 AvailableTagsReloaded?.Invoke(this, EventArgs.Empty);
 
                 if (firstRun)
@@ -625,6 +659,18 @@ public class MainViewModel : BindableBase
     public void NotifyClearTagSelection()
     {
         ClearTagSelection?.Invoke();
+    }
+
+    public async Task RenameTagAsync(Tag tag, string newName)
+    {
+        await App.Repository.Audiobooks.RenameTagAsync(tag.Id, newName);
+        await GetAudiobookListAsync();
+    }
+
+    public async Task DeleteTagAsync(Tag tag)
+    {
+        await App.Repository.Audiobooks.DeleteTagAsync(tag.Id);
+        await GetAudiobookListAsync();
     }
 
     /// <summary>
