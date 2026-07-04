@@ -126,7 +126,7 @@
                 </winUi:Effects.Shadow>
             </Border>
 
-            <!--  Play Button and Black Overlay  -->
+            <!--  Play Button Overlay  -->
             <Grid
                 Grid.Row="0"
                 Visibility="Collapsed"
@@ -137,18 +137,48 @@
                     <SolidColorBrush x:Key="ButtonBackgroundPressed">Transparent</SolidColorBrush>
                     <SolidColorBrush x:Key="ButtonBackgroundDisabled">Transparent</SolidColorBrush>
                 </Grid.Resources>
-                <Grid
-                    Background="Black"
-                    CornerRadius="{StaticResource OverlayCornerRadius}"
-                    Opacity="0.55" />
-                <Border
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-                    <Viewbox MaxHeight="{x:Bind ViewModel.PlayButtonHeightWidth, Mode=OneWay}"
+                <Button
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="8"
+                    Padding="4"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    Click="EllipsisButton_Click"
+                    PointerEntered="EllipsisButton_OnPointerEntered"
+                    PointerExited="EllipsisButton_OnPointerExited"
+                    x:Name="EllipsisButton"
+                    Opacity="0.75"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Button.RenderTransform>
+                        <CompositeTransform />
+                    </Button.RenderTransform>
+                    <FontIcon Foreground="White" Glyph="&#xE712;" FontSize="16" />
+                </Button>
+                <Button
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="8"
+                    Padding="4"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    Click="PlayButton_Click"
+                    PointerEntered="PlayButton_OnPointerEntered"
+                    PointerExited="PlayButton_OnPointerExited"
+                    x:Name="PlayButton"
+                    Opacity="0.75"
+                    RenderTransformOrigin="0.5,0.5">
+                    <Button.RenderTransform>
+                        <CompositeTransform />
+                    </Button.RenderTransform>
+                    <Viewbox
+                        MaxHeight="{x:Bind ViewModel.PlayButtonHeightWidth, Mode=OneWay}"
                         MaxWidth="{x:Bind ViewModel.PlayButtonHeightWidth, Mode=OneWay}">
-                        <FontIcon Glyph="&#xF5B0;" />
+                        <FontIcon Foreground="White" Glyph="&#xF5B0;" />
                     </Viewbox>
-                </Border>
+                </Button>
             </Grid>
 
             <!-- Selection badge (top-left corner of cover image, shown when tile is selected) -->

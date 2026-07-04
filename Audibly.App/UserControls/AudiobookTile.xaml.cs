@@ -33,6 +33,8 @@ public sealed partial class AudiobookTile : UserControl
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private ObservableCollection<Audibly.Models.Bookmark> _bookmarks = new();
     private readonly BookmarkService _bookmarkService = new();
+    private bool _playButtonHovered;
+    private bool _ellipsisButtonHovered;
 
     public AudiobookTile()
     {
@@ -180,10 +182,97 @@ public sealed partial class AudiobookTile : UserControl
 
     private void AudiobookTile_OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
-        var flyout = GetMenuFlyout();
-        if (flyout?.IsOpen == true || GetMultiSelectMenuFlyout()?.IsOpen == true) return;
-        BlackOverlayGrid.Visibility = Visibility.Collapsed;
-        ButtonTile.Background = new SolidColorBrush(Colors.Transparent); // Revert background to original
+        // Defer so that PlayButton_OnPointerEntered can set _playButtonHovered first when
+        // moving from the tile surface into the nested play button.
+        _dispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal, () =>
+        {
+            if (_playButtonHovered || _ellipsisButtonHovered) return;
+            var flyout = GetMenuFlyout();
+            if (flyout?.IsOpen == true || GetMultiSelectMenuFlyout()?.IsOpen == true) return;
+            BlackOverlayGrid.Visibility = Visibility.Collapsed;
+            ButtonTile.Background = new SolidColorBrush(Colors.Transparent);
+        });
+    }
+
+    private void PlayButton_OnPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        _playButtonHovered = true;
+        PlayButton.Opacity = 1.0;
+        if (PlayButton.RenderTransform is CompositeTransform transform)
+        {
+            transform.ScaleX = 1.2;
+            transform.ScaleY = 1.2;
+        }
+    }
+
+    private void PlayButton_OnPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        _playButtonHovered = false;
+        PlayButton.Opacity = 0.75;
+        if (PlayButton.RenderTransform is CompositeTransform transform)
+        {
+            transform.ScaleX = 1.0;
+            transform.ScaleY = 1.0;
+        }
+        // Pointer moved back to tile area; keep overlay visible.
+        BlackOverlayGrid.Visibility = Visibility.Visible;
+    }
+
+    private void EllipsisButton_OnPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        _ellipsisButtonHovered = true;
+        EllipsisButton.Opacity = 1.0;
+        if (EllipsisButton.RenderTransform is CompositeTransform transform)
+        {
+            transform.ScaleX = 1.2;
+            transform.ScaleY = 1.2;
+        }
+    }
+
+    private void EllipsisButton_OnPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        _ellipsisButtonHovered = false;
+        EllipsisButton.Opacity = 0.75;
+        if (EllipsisButton.RenderTransform is CompositeTransform transform)
+        {
+            transform.ScaleX = 1.0;
+            transform.ScaleY = 1.0;
+        }
+        BlackOverlayGrid.Visibility = Visibility.Visible;
+    }
+
+    private void EllipsisButton_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.ClearSelection();
+        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Transient };
+        GetMenuFlyout()?.ShowAt(EllipsisButton, options);
+    }
+
+    private async void PlayButton_Click(object sender, RoutedEventArgs e)
+    {
+        ViewModel.ClearSelection();
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
+
+        try
+        {
+            await _dispatcherQueue.EnqueueAsync(async () =>
+            {
+                var currentAudiobook = PlayerViewModel.NowPlaying;
+                if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+                    await PlayerViewModel.OpenAudiobook(audiobook);
+                PlayerViewModel.MediaPlayer.Play();
+            });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.LoggingService.LogError(ex, true);
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "Failed to open/play audiobook.",
+                Severity = InfoBarSeverity.Error
+            });
+        }
     }
 
     private void MenuFlyout_Closed(object sender, object e)
