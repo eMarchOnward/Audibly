@@ -20,6 +20,11 @@
                 Click="PlayAudiobook_OnClick"
                 Icon="Play"
                 Text="Play" />
+            <MenuFlyoutItem Click="OpenInMiniPlayer_OnClick" Text="Open in Mini Player">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon FontFamily="{StaticResource AudiblyCustomFont}" Glyph="&#xe900;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
             <MenuFlyoutItem
                 Click="DeleteAudiobook_OnClick"
                 Icon="Delete"

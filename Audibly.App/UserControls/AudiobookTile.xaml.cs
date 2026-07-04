@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Audibly.App.Extensions;
+using Audibly.App.Helpers;
 using Audibly.App.Services;
 using Audibly.App.ViewModels;
 using Audibly.Models;
@@ -1067,6 +1068,21 @@ public sealed partial class AudiobookTile : UserControl
 
             // Always start playing
             PlayerViewModel.MediaPlayer.Play();
+        });
+    }
+
+    private async void OpenInMiniPlayer_OnClick(object sender, RoutedEventArgs e)
+    {
+        var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
+        if (audiobook == null) return;
+
+        await _dispatcherQueue.EnqueueAsync(async () =>
+        {
+            var currentAudiobook = PlayerViewModel.NowPlaying;
+            if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+                await PlayerViewModel.OpenAudiobook(audiobook);
+
+            WindowHelper.ShowMiniPlayer();
         });
     }
 }
