@@ -429,8 +429,17 @@ public sealed partial class AppShell : Page
                 if (listItem != null) TagsListView.SelectedItems.Add(listItem);
             }
 
-            UpdateTagSelectionIndicators(TagsListView);
             _isSyncingTagSelection = false;
+
+            // Containers are not yet realized at this point because the XAML layout pass hasn't
+            // run — ContainerFromIndex returns null for every item. Defer the indicator update
+            // until after the layout pass so recycled containers don't carry stale Visibility state.
+            void OnLayoutUpdated(object? s, object a)
+            {
+                TagsListView.LayoutUpdated -= OnLayoutUpdated;
+                UpdateTagSelectionIndicators(TagsListView);
+            }
+            TagsListView.LayoutUpdated += OnLayoutUpdated;
         });
     }
 }

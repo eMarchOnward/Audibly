@@ -76,6 +76,15 @@ public class AudiobookViewModel : BindableBase
     // }
 
     /// <summary>
+    ///     Updates the Tags on the backing model from a DB-refreshed list without triggering IsModified.
+    /// </summary>
+    public void SetTagsFromDb(List<Tag> tags)
+    {
+        _model.Tags = tags;
+        OnPropertyChanged(string.Empty);
+    }
+
+    /// <summary>
     ///     Saves audiobook data that has been edited.
     /// </summary>
     public async Task SaveAsync()

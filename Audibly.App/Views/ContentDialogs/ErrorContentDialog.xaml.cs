@@ -47,17 +47,12 @@ public sealed partial class ErrorContentDialog : ContentDialog
         {
             ViewModel.LoggingService.LogError(ex, true);
 
-            // notify user with toast notification
             var notification = new Notification
             {
                 Message = $"Failed to delete audiobook: {ex.Message}",
                 Severity = InfoBarSeverity.Error
             };
             ViewModel.EnqueueNotification(notification);
-        }
-        finally
-        {
-            await ViewModel.GetAudiobookListAsync();
         }
     }
 }

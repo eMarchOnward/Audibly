@@ -230,7 +230,17 @@ public class MainViewModel : BindableBase
             }
 
             ClearSelection();
-            await GetAudiobookListAsync();
+
+            await _dispatcherQueue.EnqueueAsync(() =>
+            {
+                foreach (var audiobook in selected)
+                {
+                    audiobook.PropertyChanged -= OnAudiobookIsSelectedChanged;
+                    Audiobooks.Remove(audiobook);
+                    AudiobooksForFilter.Remove(audiobook);
+                }
+                ShowStartPanel = Audiobooks.Count == 0;
+            });
 
             var count = selected.Count;
             EnqueueNotification(new Notification
@@ -528,6 +538,50 @@ public class MainViewModel : BindableBase
             }
 
     /// <summary>
+    ///     Surgically refreshes tags for the given audiobooks and updates AvailableTags,
+    ///     without reloading or rebuilding the rest of the library collection.
+    /// </summary>
+    public async Task RefreshTagsForAudiobooksAsync(IEnumerable<AudiobookViewModel> modifiedBooks)
+    {
+        try
+        {
+            foreach (var vm in modifiedBooks)
+            {
+                var refreshed = await App.Repository.Audiobooks.GetAsync(vm.Id);
+                if (refreshed != null) vm.SetTagsFromDb(refreshed.Tags);
+            }
+
+            var freshTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).ToList();
+
+            await _dispatcherQueue.EnqueueAsync(() =>
+            {
+                AvailableTags.Clear();
+                foreach (var t in freshTags) AvailableTags.Add(t);
+
+                for (var i = SelectedTags.Count - 1; i >= 0; i--)
+                    if (!AvailableTags.Any(t => t.Id == SelectedTags[i].Id))
+                        SelectedTags.RemoveAt(i);
+
+                for (var i = 0; i < SelectedTags.Count; i++)
+                {
+                    var fresh = AvailableTags.FirstOrDefault(t => t.Id == SelectedTags[i].Id);
+                    if (fresh != null && fresh.Name != SelectedTags[i].Name)
+                        SelectedTags[i] = fresh;
+                }
+
+                AvailableTagsReloaded?.Invoke(this, EventArgs.Empty);
+            });
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError(ex, true);
+#if DEBUG
+            throw;
+#endif
+        }
+    }
+
+    /// <summary>
     ///     Gets the complete list of audiobooks from the database.
     /// </summary>
     public async Task GetAudiobookListAsync(bool firstRun = false)
@@ -640,7 +694,6 @@ public class MainViewModel : BindableBase
     /// </summary>
     public async Task DeleteAudiobookAsync()
     {
-        // todo: add a try-catch block here
         try
         {
             if (SelectedAudiobook == null) return;
@@ -653,13 +706,16 @@ public class MainViewModel : BindableBase
                     App.PlayerViewModel.NowPlaying = null;
                 });
 
-            await App.Repository.Audiobooks.DeleteAsync(SelectedAudiobook.Id);
-            await App.ViewModel.AppDataService.DeleteCoverImageAsync(SelectedAudiobook.CoverImagePath);
-
-            await GetAudiobookListAsync();
+            var deleted = SelectedAudiobook;
+            await App.Repository.Audiobooks.DeleteAsync(deleted.Id);
+            await App.ViewModel.AppDataService.DeleteCoverImageAsync(deleted.CoverImagePath);
 
             await _dispatcherQueue.EnqueueAsync(() =>
             {
+                deleted.PropertyChanged -= OnAudiobookIsSelectedChanged;
+                Audiobooks.Remove(deleted);
+                AudiobooksForFilter.Remove(deleted);
+                ShowStartPanel = Audiobooks.Count == 0;
                 SelectedAudiobook = null;
                 EnqueueNotification(new Notification
                 {
@@ -668,17 +724,15 @@ public class MainViewModel : BindableBase
                 });
             });
         }
-                catch (Exception ex)
-                {
-                    // Handle the exception
-                    LoggingService.LogError(ex, true);
-
-                    await DialogService.ShowErrorDialogAsync("Failed to delete audiobook", ex.Message);
-        #if DEBUG
-                    throw;
-        #endif
-                }
-            }
+        catch (Exception ex)
+        {
+            LoggingService.LogError(ex, true);
+            await DialogService.ShowErrorDialogAsync("Failed to delete audiobook", ex.Message);
+#if DEBUG
+            throw;
+#endif
+        }
+    }
 
     // todo: fix the bug here and add a confirmation dialog
     /// <summary>
@@ -739,13 +793,15 @@ public class MainViewModel : BindableBase
     public async Task RenameTagAsync(Tag tag, string newName)
     {
         await App.Repository.Audiobooks.RenameTagAsync(tag.Id, newName);
-        await GetAudiobookListAsync();
+        var affectedBooks = Audiobooks.Where(vm => vm.Model.Tags.Any(t => t.Id == tag.Id)).ToList();
+        await RefreshTagsForAudiobooksAsync(affectedBooks);
     }
 
     public async Task DeleteTagAsync(Tag tag)
     {
         await App.Repository.Audiobooks.DeleteTagAsync(tag.Id);
-        await GetAudiobookListAsync();
+        var affectedBooks = Audiobooks.Where(vm => vm.Model.Tags.Any(t => t.Id == tag.Id)).ToList();
+        await RefreshTagsForAudiobooksAsync(affectedBooks);
     }
 
     /// <summary>
@@ -792,8 +848,6 @@ public class MainViewModel : BindableBase
     /// <param name="e"></param>
     public async void CreateExportFile(object sender, RoutedEventArgs e)
     {
-        await GetAudiobookListAsync();
-
         var audiobooksExport = Audiobooks.Select(x => new
         {
             x.CurrentTimeMs, x.CoverImagePath, x.CurrentSourceFile.FilePath, x.Progress,

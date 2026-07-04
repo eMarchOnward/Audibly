@@ -20,7 +20,7 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
             .Include(x => x.Bookmarks)
             .Include(x => x.Tags)
             .OrderBy(audiobook => audiobook.Title)
-            // .AsNoTracking()  // todo: testing this out
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -174,49 +174,31 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
             if (newTags == null || newTags.Count == 0)
                 return;
 
-            // Process each new tag
+            // Batch lookup: one query for all incoming tags instead of one per tag
+            var normalizedNames = newTags.Select(t => t.NormalizedName).ToList();
+            var existingDbTags = await db.Tags
+                .Where(t => normalizedNames.Contains(t.NormalizedName))
+                .ToListAsync();
+            var existingByName = existingDbTags.ToDictionary(t => t.NormalizedName);
+
             foreach (var incomingTag in newTags)
             {
-                System.Diagnostics.Debug.WriteLine($"Processing tag: {incomingTag.Name} (Normalized: {incomingTag.NormalizedName}, Id: {incomingTag.Id})");
-                
-                // Find or create the tag in the database
-                var dbTag = await db.Tags
-                    .Where(t => t.NormalizedName == incomingTag.NormalizedName)
-                    .FirstOrDefaultAsync();
-
-                if (dbTag != null)
+                if (existingByName.TryGetValue(incomingTag.NormalizedName, out var dbTag))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Found existing tag in DB: {dbTag.Name} (Id: {dbTag.Id})");
-                    
-                    // Tag exists - attach it if not already tracked
-                    var entry = db.Entry(dbTag);
-                    System.Diagnostics.Debug.WriteLine($"Tag entry state: {entry.State}");
-                    
-                    if (entry.State == EntityState.Detached)
-                    {
+                    if (db.Entry(dbTag).State == EntityState.Detached)
                         db.Tags.Attach(dbTag);
-                        System.Diagnostics.Debug.WriteLine("Attached tag to context");
-                    }
                     existingAudiobook.Tags.Add(dbTag);
-                    System.Diagnostics.Debug.WriteLine("Added tag to audiobook");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("Creating new tag");
-                    
-                    // Tag doesn't exist - create a new one
                     var newTag = new Tag
                     {
                         Id = Guid.NewGuid(),
                         Name = incomingTag.Name,
                         NormalizedName = incomingTag.NormalizedName
                     };
-                    
-                    System.Diagnostics.Debug.WriteLine($"New tag created with Id: {newTag.Id}");
                     db.Tags.Add(newTag);
-                    System.Diagnostics.Debug.WriteLine("Added new tag to context");
                     existingAudiobook.Tags.Add(newTag);
-                    System.Diagnostics.Debug.WriteLine("Added new tag to audiobook");
                 }
             }
         }

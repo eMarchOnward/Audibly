@@ -390,12 +390,6 @@ public sealed partial class AudiobookTile : UserControl
                 // Force refresh of cover image properties in the UI
                 audiobook.RefreshCoverImage();
 
-                // Refresh Library view so updated cover appears
-                await _dispatcherQueue.EnqueueAsync(async () =>
-                {
-                    await ViewModel.GetAudiobookListAsync();
-                });
-
                 // If the edited audiobook is currently playing, update NowPlaying cover
                 var now = PlayerViewModel.NowPlaying;
                 if (now != null && now.Id == audiobook.Id)
@@ -796,7 +790,7 @@ public sealed partial class AudiobookTile : UserControl
         }
 
         await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
-        await _dispatcherQueue.EnqueueAsync(async () => await ViewModel.GetAudiobookListAsync());
+        await ViewModel.RefreshTagsForAudiobooksAsync(selectedAudiobooks);
     }
 
     private async void EditInfo_OnClick(object sender, RoutedEventArgs e)
@@ -1013,10 +1007,7 @@ public sealed partial class AudiobookTile : UserControl
             await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
             audiobook.RefreshCoverImage();
 
-            await _dispatcherQueue.EnqueueAsync(async () =>
-            {
-                await ViewModel.GetAudiobookListAsync();
-            });
+            await ViewModel.RefreshTagsForAudiobooksAsync(new[] { audiobook });
 
             var now = PlayerViewModel.NowPlaying;
             if (now != null && now.Id == audiobook.Id)

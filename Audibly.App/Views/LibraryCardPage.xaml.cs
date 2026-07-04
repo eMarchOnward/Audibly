@@ -628,7 +628,7 @@ public sealed partial class LibraryCardPage : Page
         }
 
         await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
-        await _dispatcherQueue.EnqueueAsync(async () => await ViewModel.GetAudiobookListAsync());
+        await ViewModel.RefreshTagsForAudiobooksAsync(selectedAudiobooks);
     }
 
     private static string MultiSelectNormalizeTagName(string tagName)
