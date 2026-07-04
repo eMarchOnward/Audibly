@@ -198,6 +198,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         _playButtonHovered = true;
         PlayButton.Opacity = 1.0;
+        PlayCircle.Opacity = 0.45;
         if (PlayButton.RenderTransform is CompositeTransform transform)
         {
             transform.ScaleX = 1.2;
@@ -209,12 +210,12 @@ public sealed partial class AudiobookTile : UserControl
     {
         _playButtonHovered = false;
         PlayButton.Opacity = 0.75;
+        PlayCircle.Opacity = 0;
         if (PlayButton.RenderTransform is CompositeTransform transform)
         {
             transform.ScaleX = 1.0;
             transform.ScaleY = 1.0;
         }
-        // Pointer moved back to tile area; keep overlay visible.
         BlackOverlayGrid.Visibility = Visibility.Visible;
     }
 
@@ -222,6 +223,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         _ellipsisButtonHovered = true;
         EllipsisButton.Opacity = 1.0;
+        EllipsisCircle.Opacity = 0.45;
         if (EllipsisButton.RenderTransform is CompositeTransform transform)
         {
             transform.ScaleX = 1.2;
@@ -233,6 +235,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         _ellipsisButtonHovered = false;
         EllipsisButton.Opacity = 0.75;
+        EllipsisCircle.Opacity = 0;
         if (EllipsisButton.RenderTransform is CompositeTransform transform)
         {
             transform.ScaleX = 1.0;
@@ -244,7 +247,7 @@ public sealed partial class AudiobookTile : UserControl
     private void EllipsisButton_Click(object sender, RoutedEventArgs e)
     {
         ViewModel.ClearSelection();
-        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Transient };
+        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Standard };
         GetMenuFlyout()?.ShowAt(EllipsisButton, options);
     }
 
@@ -278,7 +281,7 @@ public sealed partial class AudiobookTile : UserControl
     private void MenuFlyout_Closed(object sender, object e)
     {
         BlackOverlayGrid.Visibility = Visibility.Collapsed;
-        ButtonTile.Background = new SolidColorBrush(Colors.Transparent); // Revert background to original
+        ButtonTile.Background = new SolidColorBrush(Colors.Transparent);
     }
 
     private void ButtonTile_Click(object sender, RoutedEventArgs e)
@@ -433,7 +436,7 @@ public sealed partial class AudiobookTile : UserControl
     private void ButtonTile_OnRightTapped(object sender, RightTappedRoutedEventArgs? e)
     {
         if (e is null) return;
-        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Transient };
+        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Standard };
         if (ViewModel.Audiobooks.Count(a => a.IsSelected) >= 2)
             GetMultiSelectMenuFlyout()?.ShowAt(ButtonTile, options);
         else

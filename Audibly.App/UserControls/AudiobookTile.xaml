@@ -141,7 +141,7 @@
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
                     Margin="8"
-                    Padding="4"
+                    Padding="0"
                     Background="Transparent"
                     BorderBrush="Transparent"
                     BorderThickness="0"
@@ -154,7 +154,10 @@
                     <Button.RenderTransform>
                         <CompositeTransform />
                     </Button.RenderTransform>
-                    <FontIcon Foreground="White" Glyph="&#xE712;" FontSize="16" />
+                    <Grid Width="44" Height="44">
+                        <Ellipse x:Name="EllipsisCircle" Fill="Black" Opacity="0" />
+                        <FontIcon Foreground="White" Glyph="&#xE712;" FontSize="32" />
+                    </Grid>
                 </Button>
                 <Button
                     HorizontalAlignment="Right"
@@ -173,11 +176,10 @@
                     <Button.RenderTransform>
                         <CompositeTransform />
                     </Button.RenderTransform>
-                    <Viewbox
-                        MaxHeight="{x:Bind ViewModel.PlayButtonHeightWidth, Mode=OneWay}"
-                        MaxWidth="{x:Bind ViewModel.PlayButtonHeightWidth, Mode=OneWay}">
-                        <FontIcon Foreground="White" Glyph="&#xF5B0;" />
-                    </Viewbox>
+                    <Grid Width="44" Height="44">
+                        <Ellipse x:Name="PlayCircle" Fill="Black" Opacity="0" />
+                        <FontIcon Foreground="White" Glyph="&#xF5B0;" FontSize="28" />
+                    </Grid>
                 </Button>
             </Grid>
 
