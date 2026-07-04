@@ -388,6 +388,33 @@
             </Grid>
         </StackPanel>
 
+        <!--  multi-select action bar: appears when 2+ tiles are selected  -->
+        <StackPanel
+            x:Name="MultiSelectActionBar"
+            HorizontalAlignment="Center"
+            Orientation="Horizontal"
+            RelativePanel.AlignLeftWithPanel="True"
+            RelativePanel.AlignRightWithPanel="True"
+            RelativePanel.Below="TitleAndCommandBarPanel"
+            Spacing="8"
+            Padding="0,4,0,2"
+            Visibility="{x:Bind ViewModel.HasMultipleSelected, Mode=OneWay}">
+            <HyperlinkButton Click="MultiSelectDeleteSelected_OnClick" Padding="8,4"
+                             Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE74D;" FontSize="13" VerticalAlignment="Center" />
+                    <TextBlock Text="Delete selected" VerticalAlignment="Center" />
+                </StackPanel>
+            </HyperlinkButton>
+            <HyperlinkButton Click="MultiSelectManageTags_OnClick" Padding="8,4"
+                             Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8EC;" FontSize="13" VerticalAlignment="Center" />
+                    <TextBlock Text="Manage tags" VerticalAlignment="Center" />
+                </StackPanel>
+            </HyperlinkButton>
+        </StackPanel>
+
         <!--  library card view  -->
         <ScrollViewer
             IsVerticalScrollChainingEnabled="False"
@@ -395,7 +422,7 @@
             RelativePanel.AlignBottomWithPanel="True"
             RelativePanel.AlignLeftWithPanel="True"
             RelativePanel.AlignRightWithPanel="True"
-            RelativePanel.Below="TitleAndCommandBarPanel"
+            RelativePanel.Below="MultiSelectActionBar"
             x:Name="LibraryCardScrollView">
             <StackPanel Orientation="Vertical">
                 <ItemsRepeater

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -404,6 +405,262 @@ public sealed partial class LibraryCardPage : Page
         #endif
                 }
             }
+
+    #region multi-select action bar
+
+    private async void MultiSelectDeleteSelected_OnClick(object sender, RoutedEventArgs e)
+    {
+        var count = ViewModel.Audiobooks.Count(a => a.IsSelected);
+        if (count == 0) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Delete selected",
+            Content = $"Permanently delete {count} audiobook{(count == 1 ? "" : "s")}? This cannot be undone.",
+            PrimaryButtonText = "Delete",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Secondary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await ViewModel.DeleteSelectedAudiobooksAsync();
+    }
+
+    private async void MultiSelectManageTags_OnClick(object sender, RoutedEventArgs e)
+    {
+        var selectedAudiobooks = ViewModel.Audiobooks.Where(a => a.IsSelected).ToList();
+        if (selectedAudiobooks.Count == 0) return;
+
+        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).OrderBy(t => t.Name).ToList();
+
+        var pendingAddTags = new ObservableCollection<Tag>();
+        var pendingRemoveTags = new ObservableCollection<Tag>();
+
+        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
+        var captionStyle = Application.Current.Resources["CaptionTextBlockStyle"] as Style;
+
+        var addTagsBox = new CommunityToolkit.WinUI.Controls.TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingAddTags,
+            TextMemberPath = "Name"
+        };
+        addTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = MultiSelectNormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingAddTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            args.Item = allTags.FirstOrDefault(t => t.NormalizedName == norm)
+                        ?? new Tag { Name = text, NormalizedName = norm };
+        };
+
+        var removeTagsBox = new CommunityToolkit.WinUI.Controls.TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingRemoveTags,
+            TextMemberPath = "Name"
+        };
+        removeTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = MultiSelectNormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingRemoveTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            var existing = allTags.FirstOrDefault(t => t.NormalizedName == norm);
+            if (existing == null) { args.Cancel = true; return; }
+            args.Item = existing;
+        };
+
+        var addTagButtons = new Dictionary<string, Button>();
+        var removeTagButtons = new Dictionary<string, Button>();
+        StackPanel? addTagStrip = null;
+        StackPanel? removeTagStrip = null;
+
+        if (allTags.Count > 0)
+        {
+            addTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            removeTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+            foreach (var tag in allTags)
+            {
+                var capturedTag = tag;
+
+                var addBtn = new Button { Content = "+ " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                addBtn.Click += (_, _) =>
+                {
+                    if (!pendingAddTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingAddTags.Add(capturedTag);
+                };
+                addTagButtons[tag.NormalizedName] = addBtn;
+                addTagStrip.Children.Add(addBtn);
+
+                var removeBtn = new Button { Content = "- " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                removeBtn.Click += (_, _) =>
+                {
+                    if (!pendingRemoveTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingRemoveTags.Add(capturedTag);
+                };
+                removeTagButtons[tag.NormalizedName] = removeBtn;
+                removeTagStrip.Children.Add(removeBtn);
+            }
+
+            pendingAddTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+
+            pendingRemoveTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+        }
+
+        StackPanel BuildSection(string title, StackPanel? strip, CommunityToolkit.WinUI.Controls.TokenizingTextBox tagsBox)
+        {
+            var section = new StackPanel { Spacing = 8 };
+            section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
+            if (strip != null)
+            {
+                section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
+                section.Children.Add(new ScrollViewer
+                {
+                    Content = strip,
+                    HorizontalScrollMode = ScrollMode.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    VerticalScrollMode = ScrollMode.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
+                });
+            }
+            section.Children.Add(tagsBox);
+            return section;
+        }
+
+        var content = new StackPanel { Spacing = 16, MinWidth = 440, Padding = new Thickness(4) };
+        content.Children.Add(BuildSection("Add Tags", addTagStrip, addTagsBox));
+        content.Children.Add(new Border
+        {
+            Height = 1,
+            Background = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
+            Margin = new Thickness(0, 4, 0, 4)
+        });
+        content.Children.Add(BuildSection("Remove Tags", removeTagStrip, removeTagsBox));
+
+        var count = selectedAudiobooks.Count;
+        var dialog = new ContentDialog
+        {
+            Title = $"Manage Tags — {count} audiobook{(count == 1 ? "" : "s")}",
+            Content = new ScrollViewer
+            {
+                Content = content,
+                MaxHeight = 520,
+                VerticalScrollMode = ScrollMode.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            },
+            PrimaryButtonText = "OK",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            MinWidth = 500
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        foreach (var t in MultiSelectParseTagsFromText(addTagsBox.Text ?? string.Empty))
+            if (!pendingAddTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingAddTags.Add(allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName) ?? t);
+
+        foreach (var t in MultiSelectParseTagsFromText(removeTagsBox.Text ?? string.Empty))
+        {
+            var existing = allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName);
+            if (existing != null && !pendingRemoveTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingRemoveTags.Add(existing);
+        }
+
+        if (pendingAddTags.Count == 0 && pendingRemoveTags.Count == 0) return;
+
+        foreach (var audiobook in selectedAudiobooks)
+        {
+            var modified = false;
+
+            foreach (var addTag in pendingAddTags)
+            {
+                if (!audiobook.Model.Tags.Any(t => t.NormalizedName == addTag.NormalizedName))
+                {
+                    audiobook.Model.Tags.Add(allTags.FirstOrDefault(t => t.NormalizedName == addTag.NormalizedName) ?? addTag);
+                    modified = true;
+                }
+            }
+
+            foreach (var removeTag in pendingRemoveTags)
+            {
+                var match = audiobook.Model.Tags.FirstOrDefault(t => t.NormalizedName == removeTag.NormalizedName);
+                if (match != null)
+                {
+                    audiobook.Model.Tags.Remove(match);
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                audiobook.IsModified = true;
+                await audiobook.SaveAsync();
+            }
+        }
+
+        await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
+        await _dispatcherQueue.EnqueueAsync(async () => await ViewModel.GetAudiobookListAsync());
+    }
+
+    private static string MultiSelectNormalizeTagName(string tagName)
+    {
+        if (string.IsNullOrWhiteSpace(tagName)) return string.Empty;
+        var normalized = tagName.Trim();
+        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) ||
+            c == ' ' || c == '-' || c == '|' || c == '/' || c == '_').ToArray());
+        return normalized.ToLowerInvariant();
+    }
+
+    private static List<Tag> MultiSelectParseTagsFromText(string tagsText)
+    {
+        if (string.IsNullOrWhiteSpace(tagsText))
+            return [];
+
+        var tagNames = tagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var tags = new List<Tag>();
+
+        foreach (var tagName in tagNames)
+        {
+            var displayName = tagName.Trim();
+            var normalizedName = MultiSelectNormalizeTagName(tagName);
+            if (string.IsNullOrEmpty(normalizedName)) continue;
+            if (tags.Any(t => t.NormalizedName == normalizedName)) continue;
+            tags.Add(new Tag { Name = displayName, NormalizedName = normalizedName });
+        }
+
+        return tags;
+    }
+
+    #endregion
 
     #region debug button
 

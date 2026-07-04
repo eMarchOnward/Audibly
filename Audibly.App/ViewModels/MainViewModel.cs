@@ -180,6 +180,17 @@ public class MainViewModel : BindableBase
     public Guid? SelectionAnchorId { get; set; }
 
     /// <summary>
+    ///     True when 2 or more audiobooks are selected (drives the multi-select action bar).
+    /// </summary>
+    public bool HasMultipleSelected => Audiobooks.Count(a => a.IsSelected) >= 2;
+
+    private void OnAudiobookIsSelectedChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AudiobookViewModel.IsSelected))
+            OnPropertyChanged(nameof(HasMultipleSelected));
+    }
+
+    /// <summary>
     ///     Deselects all audiobooks and resets the selection anchor.
     /// </summary>
     public void ClearSelection()
@@ -534,10 +545,13 @@ public class MainViewModel : BindableBase
             {
                 ShowStartPanel = audiobooks.Count == 0;
 
+                foreach (var ab in Audiobooks)
+                    ab.PropertyChanged -= OnAudiobookIsSelectedChanged;
                 Audiobooks.Clear();
                 AudiobooksForFilter.Clear();
                 foreach (var audiobookViewModel in audiobooks.Select(c => new AudiobookViewModel(c)))
                 {
+                    audiobookViewModel.PropertyChanged += OnAudiobookIsSelectedChanged;
                     Audiobooks.Add(audiobookViewModel);
                     AudiobooksForFilter.Add(audiobookViewModel);
                 }
