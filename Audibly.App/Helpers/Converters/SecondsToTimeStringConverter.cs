@@ -10,9 +10,10 @@ public class SecondsToTimeStringConverter : IValueConverter
     {
         if (value is long s)
         {
-            return s.ToStr_s();
+            var t = TimeSpan.FromSeconds(s);
+            return $"{(int)t.TotalHours}:{t:mm}";
         }
-        return "0:00:00";
+        return "0:00";
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)

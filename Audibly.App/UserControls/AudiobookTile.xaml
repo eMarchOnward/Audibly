@@ -74,6 +74,19 @@
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
         </MenuFlyout>
+        <MenuFlyout
+            Placement="RightEdgeAlignedTop"
+            x:Name="MultiSelectFlyout">
+            <MenuFlyoutItem
+                Click="DeleteSelected_OnClick"
+                Icon="Delete"
+                Text="Delete selected" />
+            <MenuFlyoutItem Click="ManageTagsSelected_OnClick" Text="Manage tags">
+                <MenuFlyoutItem.Icon>
+                    <FontIcon Glyph="&#xE8EC;" />
+                </MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+        </MenuFlyout>
         <converters:MillisecondsToTimeStringConverter x:Key="MillisecondsToTimeStringConverter" />
         <converters:SecondsToTimeStringConverter x:Key="SecondsToTimeStringConverter" />
     </UserControl.Resources>
@@ -138,6 +151,23 @@
                 </Border>
             </Grid>
 
+            <!-- Selection badge (top-left corner of cover image, shown when tile is selected) -->
+            <Grid
+                Grid.Row="0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="8"
+                Visibility="Collapsed"
+                x:Name="SelectionBadge">
+                <Ellipse Fill="{ThemeResource SystemControlHighlightAccentBrush}" Width="24" Height="24" />
+                <FontIcon
+                    Glyph="&#xE73E;"
+                    FontSize="13"
+                    Foreground="White"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Grid>
+
             <!-- Details row: remove bookmarks, let title/author span full width -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
@@ -167,13 +197,13 @@
                     TextTrimming="CharacterEllipsis"
                     TextWrapping="NoWrap" />
                     
-                    <!-- Duration and Chapter Count -->
+                    <!-- Duration, Chapter Count, and Progress -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        
+
                         <TextBlock
                             Grid.Column="0"
                             FontSize="{x:Bind ViewModel.AuthorFontSize, Mode=OneWay}"
@@ -183,20 +213,17 @@
                             TextTrimming="CharacterEllipsis"
                             TextWrapping="NoWrap">
                             <Run Text="{x:Bind Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}" />
-                            <Run Text=" | " />
-                            <Run Text="{x:Bind Progress, Mode=OneWay}" /><Run Text="%" />
+                            <Run Text=" (" /><Run Text="{x:Bind ChapterCount, Mode=OneWay}" /><Run Text=")" />
                         </TextBlock>
-                        
+
                         <TextBlock
                             Grid.Column="1"
                             FontSize="{x:Bind ViewModel.AuthorFontSize, Mode=OneWay}"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                             HorizontalAlignment="Right"
                             Style="{StaticResource CaptionTextBlockStyle}"
-                            TextTrimming="CharacterEllipsis"
                             TextWrapping="NoWrap">
-                            <Run Text="{x:Bind ChapterCount, Mode=OneWay}" />
-                            <Run Text=" chapters" />
+                            <Run Text="{x:Bind Progress, Mode=OneWay}" /><Run Text="%" />
                         </TextBlock>
                     </Grid>
                 </StackPanel>

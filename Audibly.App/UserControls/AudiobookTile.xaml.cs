@@ -141,6 +141,36 @@ public sealed partial class AudiobookTile : UserControl
     public static readonly DependencyProperty SourceProperty =
         DependencyProperty.Register(nameof(Source), typeof(object), typeof(AudiobookTile), new PropertyMetadata(null));
 
+    public bool IsSelected
+    {
+        get => (bool)GetValue(IsSelectedProperty);
+        set => SetValue(IsSelectedProperty, value);
+    }
+    public static readonly DependencyProperty IsSelectedProperty =
+        DependencyProperty.Register(nameof(IsSelected), typeof(bool), typeof(AudiobookTile),
+            new PropertyMetadata(false, static (d, _) => ((AudiobookTile)d).UpdateSelectionVisual()));
+
+    private void UpdateSelectionVisual()
+    {
+        if (ButtonTile == null) return;
+        if (IsSelected)
+        {
+            ButtonTile.BorderBrush =
+                Application.Current.Resources.TryGetValue("SystemAccentColorBrush", out var b) && b is Brush accent
+                ? accent : new SolidColorBrush(Microsoft.UI.Colors.CornflowerBlue);
+            ButtonTile.BorderThickness = new Thickness(2);
+            if (SelectionBadge != null) SelectionBadge.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            ButtonTile.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            ButtonTile.BorderThickness = new Thickness(0);
+            if (SelectionBadge != null) SelectionBadge.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private MenuFlyout? GetMultiSelectMenuFlyout() => Resources["MultiSelectFlyout"] as MenuFlyout;
+
     private void AudiobookTile_OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         BlackOverlayGrid.Visibility = Visibility.Visible;
@@ -151,7 +181,7 @@ public sealed partial class AudiobookTile : UserControl
     private void AudiobookTile_OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
         var flyout = GetMenuFlyout();
-        if (flyout?.IsOpen == true) return;
+        if (flyout?.IsOpen == true || GetMultiSelectMenuFlyout()?.IsOpen == true) return;
         BlackOverlayGrid.Visibility = Visibility.Collapsed;
         ButtonTile.Background = new SolidColorBrush(Colors.Transparent); // Revert background to original
     }
@@ -162,33 +192,43 @@ public sealed partial class AudiobookTile : UserControl
         ButtonTile.Background = new SolidColorBrush(Colors.Transparent); // Revert background to original
     }
 
-    private async void ButtonTile_Click(object sender, RoutedEventArgs e)
+    private void ButtonTile_Click(object sender, RoutedEventArgs e)
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
 
-        // Check if Ctrl key is pressed
         var ctrlState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control);
         var isCtrlPressed = (ctrlState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
 
+        var shiftState = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift);
+        var isShiftPressed = (shiftState & Windows.UI.Core.CoreVirtualKeyStates.Down) == Windows.UI.Core.CoreVirtualKeyStates.Down;
+
         if (isCtrlPressed)
         {
-            // Open Edit Info dialog when Ctrl is held
-            EditInfo_OnClick(sender, e);
+            audiobook.IsSelected = !audiobook.IsSelected;
+            ViewModel.SelectionAnchorId = Id;
             return;
         }
 
-        // Normal play/pause logic
-        await _dispatcherQueue.EnqueueAsync(async () =>
+        if (isShiftPressed && ViewModel.SelectionAnchorId.HasValue)
         {
-            var currentAudiobook = PlayerViewModel.NowPlaying;
-
-            // If no audiobook is loaded, or a different audiobook is loaded, open this one
-            if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
+            var allBooks = ViewModel.Audiobooks.ToList();
+            var anchorIdx = allBooks.FindIndex(a => a.Id == ViewModel.SelectionAnchorId.Value);
+            var thisIdx = allBooks.FindIndex(a => a.Id == Id);
+            if (anchorIdx >= 0 && thisIdx >= 0)
             {
-                await PlayerViewModel.OpenAudiobook(audiobook);
+                var min = Math.Min(anchorIdx, thisIdx);
+                var max = Math.Max(anchorIdx, thisIdx);
+                for (var i = 0; i < allBooks.Count; i++)
+                    allBooks[i].IsSelected = i >= min && i <= max;
             }
-        });
+            return;
+        }
+
+        // Plain click — select this tile (clear any other selection first)
+        ViewModel.ClearSelection();
+        audiobook.IsSelected = true;
+        ViewModel.SelectionAnchorId = Id;
     }
 
     private void ShowInFileExplorer_OnClick(object sender, RoutedEventArgs e)
@@ -304,12 +344,11 @@ public sealed partial class AudiobookTile : UserControl
     private void ButtonTile_OnRightTapped(object sender, RightTappedRoutedEventArgs? e)
     {
         if (e is null) return;
-        var myOption = new FlyoutShowOptions
-        {
-            ShowMode = FlyoutShowMode.Transient
-        };
-        var flyout = GetMenuFlyout();
-        flyout?.ShowAt(ButtonTile, myOption);
+        var options = new FlyoutShowOptions { ShowMode = FlyoutShowMode.Transient };
+        if (ViewModel.Audiobooks.Count(a => a.IsSelected) >= 2)
+            GetMultiSelectMenuFlyout()?.ShowAt(ButtonTile, options);
+        else
+            GetMenuFlyout()?.ShowAt(ButtonTile, options);
     }
 
     private void OpenInAppFolder_OnClick(object sender, RoutedEventArgs e)
@@ -436,6 +475,236 @@ public sealed partial class AudiobookTile : UserControl
             return string.Empty;
 
         return string.Join(", ", tags.Select(t => t.Name));
+    }
+
+    private async void DeleteSelected_OnClick(object sender, RoutedEventArgs e)
+    {
+        var count = ViewModel.Audiobooks.Count(a => a.IsSelected);
+        if (count == 0) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Delete selected",
+            Content = $"Permanently delete {count} audiobook{(count == 1 ? "" : "s")}? This cannot be undone.",
+            PrimaryButtonText = "Delete",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Secondary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await ViewModel.DeleteSelectedAudiobooksAsync();
+    }
+
+    private async void ManageTagsSelected_OnClick(object sender, RoutedEventArgs e)
+    {
+        var selectedAudiobooks = ViewModel.Audiobooks.Where(a => a.IsSelected).ToList();
+        if (selectedAudiobooks.Count == 0) return;
+
+        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).OrderBy(t => t.Name).ToList();
+
+        var pendingAddTags = new ObservableCollection<Tag>();
+        var pendingRemoveTags = new ObservableCollection<Tag>();
+
+        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
+        var captionStyle = Application.Current.Resources["CaptionTextBlockStyle"] as Style;
+
+        // --- TokenizingTextBoxes ---
+        var addTagsBox = new TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingAddTags,
+            TextMemberPath = "Name"
+        };
+        addTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = NormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingAddTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            args.Item = allTags.FirstOrDefault(t => t.NormalizedName == norm)
+                        ?? new Tag { Name = text, NormalizedName = norm };
+        };
+
+        var removeTagsBox = new TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingRemoveTags,
+            TextMemberPath = "Name"
+        };
+        removeTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = NormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingRemoveTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            var existing = allTags.FirstOrDefault(t => t.NormalizedName == norm);
+            if (existing == null) { args.Cancel = true; return; }
+            args.Item = existing;
+        };
+
+        // --- Tag strips (one per section) ---
+        var addTagButtons = new Dictionary<string, Button>();
+        var removeTagButtons = new Dictionary<string, Button>();
+        StackPanel? addTagStrip = null;
+        StackPanel? removeTagStrip = null;
+
+        if (allTags.Count > 0)
+        {
+            addTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            removeTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+
+            foreach (var tag in allTags)
+            {
+                var capturedTag = tag;
+
+                var addBtn = new Button { Content = "+ " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                addBtn.Click += (_, _) =>
+                {
+                    if (!pendingAddTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingAddTags.Add(capturedTag);
+                };
+                addTagButtons[tag.NormalizedName] = addBtn;
+                addTagStrip.Children.Add(addBtn);
+
+                var removeBtn = new Button { Content = "- " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                removeBtn.Click += (_, _) =>
+                {
+                    if (!pendingRemoveTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingRemoveTags.Add(capturedTag);
+                };
+                removeTagButtons[tag.NormalizedName] = removeBtn;
+                removeTagStrip.Children.Add(removeBtn);
+            }
+
+            pendingAddTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+
+            pendingRemoveTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+        }
+
+        // --- Layout helpers ---
+        StackPanel BuildSection(string title, StackPanel? strip, TokenizingTextBox tagsBox)
+        {
+            var section = new StackPanel { Spacing = 8 };
+            section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
+
+            if (strip != null)
+            {
+                section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
+                section.Children.Add(new ScrollViewer
+                {
+                    Content = strip,
+                    HorizontalScrollMode = ScrollMode.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    VerticalScrollMode = ScrollMode.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
+                });
+            }
+
+            section.Children.Add(tagsBox);
+            return section;
+        }
+
+        var content = new StackPanel { Spacing = 16, MinWidth = 440, Padding = new Thickness(4) };
+        content.Children.Add(BuildSection("Add Tags", addTagStrip, addTagsBox));
+        content.Children.Add(new Border
+        {
+            Height = 1,
+            Background = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
+            Margin = new Thickness(0, 4, 0, 4)
+        });
+        content.Children.Add(BuildSection("Remove Tags", removeTagStrip, removeTagsBox));
+
+        var count = selectedAudiobooks.Count;
+        var dialog = new ContentDialog
+        {
+            Title = $"Manage Tags — {count} audiobook{(count == 1 ? "" : "s")}",
+            Content = new ScrollViewer
+            {
+                Content = content,
+                MaxHeight = 520,
+                VerticalScrollMode = ScrollMode.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            },
+            PrimaryButtonText = "OK",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+            MinWidth = 500
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        // Commit any free text still in the boxes
+        foreach (var t in ParseTagsFromText(addTagsBox.Text ?? string.Empty))
+            if (!pendingAddTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingAddTags.Add(allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName) ?? t);
+
+        foreach (var t in ParseTagsFromText(removeTagsBox.Text ?? string.Empty))
+        {
+            var existing = allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName);
+            if (existing != null && !pendingRemoveTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingRemoveTags.Add(existing);
+        }
+
+        if (pendingAddTags.Count == 0 && pendingRemoveTags.Count == 0) return;
+
+        // Apply to each selected audiobook
+        foreach (var audiobook in selectedAudiobooks)
+        {
+            var modified = false;
+
+            foreach (var addTag in pendingAddTags)
+            {
+                if (!audiobook.Model.Tags.Any(t => t.NormalizedName == addTag.NormalizedName))
+                {
+                    audiobook.Model.Tags.Add(allTags.FirstOrDefault(t => t.NormalizedName == addTag.NormalizedName) ?? addTag);
+                    modified = true;
+                }
+            }
+
+            foreach (var removeTag in pendingRemoveTags)
+            {
+                var match = audiobook.Model.Tags.FirstOrDefault(t => t.NormalizedName == removeTag.NormalizedName);
+                if (match != null)
+                {
+                    audiobook.Model.Tags.Remove(match);
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                audiobook.IsModified = true;
+                await audiobook.SaveAsync();
+            }
+        }
+
+        await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
+        await _dispatcherQueue.EnqueueAsync(async () => await ViewModel.GetAudiobookListAsync());
     }
 
     private async void EditInfo_OnClick(object sender, RoutedEventArgs e)

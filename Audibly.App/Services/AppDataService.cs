@@ -149,7 +149,7 @@ public class AppDataService : IAppDataService
         try
         {
             var dirName = Path.GetDirectoryName(path);
-            if (string.IsNullOrEmpty(dirName)) return;
+            if (string.IsNullOrEmpty(dirName) || !Directory.Exists(dirName)) return;
 
             var folder = await StorageFolder.GetFolderFromPathAsync(dirName);
 

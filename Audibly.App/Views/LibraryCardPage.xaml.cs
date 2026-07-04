@@ -13,6 +13,7 @@ using Windows.UI;
 using Windows.ApplicationModel.DataTransfer;
 using Audibly.App.Helpers;
 using Audibly.App.Services;
+using Audibly.App.UserControls;
 using Audibly.App.ViewModels;
 using Audibly.App.Views.ContentDialogs;
 using Audibly.Models;
@@ -74,6 +75,9 @@ public sealed partial class LibraryCardPage : Page
 
         // initialize sort toggles based on saved sort mode
         UpdateSortToggleUI();
+
+        this.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnPageKeyDown), true);
+        LibraryCardScrollView.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnScrollViewPointerPressed), true);
     }
 
     /// <summary>
@@ -326,6 +330,25 @@ public sealed partial class LibraryCardPage : Page
         if (InProgressFilterCheckBox.IsChecked == true && NotStartedFilterCheckBox.IsChecked == true &&
             CompletedFilterCheckBox.IsChecked == true)
             SelectAllFiltersCheckBox.IsChecked = false;
+    }
+
+    private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Escape && ViewModel.Audiobooks.Any(a => a.IsSelected))
+            ViewModel.ClearSelection();
+    }
+
+    private void OnScrollViewPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!ViewModel.Audiobooks.Any(a => a.IsSelected)) return;
+
+        var current = e.OriginalSource as DependencyObject;
+        while (current != null && current != LibraryCardScrollView)
+        {
+            if (current is AudiobookTile) return;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        ViewModel.ClearSelection();
     }
 
     private void LibraryCardPage_DragOver(object sender, DragEventArgs e)

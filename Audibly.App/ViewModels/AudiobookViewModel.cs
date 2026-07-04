@@ -57,6 +57,13 @@ public class AudiobookViewModel : BindableBase
     /// </remarks>
     public bool IsModified { get; set; }
 
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => Set(ref _isSelected, value);
+    }
+
     // private bool _isNewAudiobook;
     //
     // /// <summary>

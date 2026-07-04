@@ -174,6 +174,67 @@ public class MainViewModel : BindableBase
         set => Set(ref _selectedAudiobook, value);
     }
 
+    /// <summary>
+    ///     The last item clicked (used as anchor for Shift+click range selection).
+    /// </summary>
+    public Guid? SelectionAnchorId { get; set; }
+
+    /// <summary>
+    ///     Deselects all audiobooks and resets the selection anchor.
+    /// </summary>
+    public void ClearSelection()
+    {
+        foreach (var a in Audiobooks)
+            a.IsSelected = false;
+        SelectionAnchorId = null;
+    }
+
+    /// <summary>
+    ///     Deletes all currently selected audiobooks.
+    /// </summary>
+    public async Task DeleteSelectedAudiobooksAsync()
+    {
+        var selected = Audiobooks.Where(a => a.IsSelected).ToList();
+        if (selected.Count == 0) return;
+
+        try
+        {
+            var nowPlaying = App.PlayerViewModel.NowPlaying;
+            if (nowPlaying != null && selected.Any(a => a.Id == nowPlaying.Id))
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    var np = App.PlayerViewModel.NowPlaying;
+                    if (np != null)
+                    {
+                        App.PlayerViewModel.MediaPlayer.Pause();
+                        np.IsNowPlaying = false;
+                        App.PlayerViewModel.NowPlaying = null;
+                    }
+                });
+
+            foreach (var audiobook in selected)
+            {
+                await App.Repository.Audiobooks.DeleteAsync(audiobook.Id);
+                await AppDataService.DeleteCoverImageAsync(audiobook.CoverImagePath);
+            }
+
+            ClearSelection();
+            await GetAudiobookListAsync();
+
+            var count = selected.Count;
+            EnqueueNotification(new Notification
+            {
+                Message = $"{count} audiobook{(count == 1 ? "" : "s")} deleted successfully!",
+                Severity = InfoBarSeverity.Success
+            });
+        }
+        catch (Exception ex)
+        {
+            LoggingService.LogError(ex, true);
+            await DialogService.ShowErrorDialogAsync("Failed to delete audiobooks", ex.Message);
+        }
+    }
+
     public double DefaultPlaybackSpeed
     {
         get => _defaultPlaybackSpeed;
