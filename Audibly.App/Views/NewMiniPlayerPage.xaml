@@ -58,9 +58,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="125" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="100" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -94,7 +92,7 @@
                 ShowPlaybackSpeed="True"
                 Spacing="4"
                 TitleFontSize="16"
-                TitleMaxWidth="125"
+                TitleMaxWidth="100"
                 VerticalAlignment="Top" />
 
             <userControls:PlaySkipButtonsStack
@@ -296,21 +294,6 @@
                     </Button.Flyout>
                 </Button>
 
-            </StackPanel>
-            <!--  endregion: other buttons  -->
-
-            <Border
-                Background="{ThemeResource AppBarSeparatorForeground}"
-                Grid.Column="6"
-                Height="40"
-                HorizontalAlignment="Center"
-                Width="1" />
-
-            <StackPanel
-                Grid.Column="7"
-                Orientation="Horizontal"
-                Spacing="-8"
-                VerticalAlignment="Center">
 
                 <!--  pin button  -->
                 <Button
