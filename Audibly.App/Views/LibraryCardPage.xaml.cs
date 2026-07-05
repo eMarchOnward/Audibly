@@ -35,7 +35,7 @@ namespace Audibly.App.Views;
 /// </summary>
 public sealed partial class LibraryCardPage : Page
 {
-    #region AudioBookFilter enum
+    #region Filter enums
 
     public enum AudioBookFilter
     {
@@ -43,6 +43,8 @@ public sealed partial class LibraryCardPage : Page
         NotStarted,
         Completed
     }
+
+    private enum LengthFilter { Any, Short, Medium, Long }
 
     #endregion
 
@@ -59,6 +61,14 @@ public sealed partial class LibraryCardPage : Page
     private readonly HashSet<AudioBookFilter> _activeFilters = new();
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private bool _suppressNextTextClear;
+
+    // Length filter state
+    private LengthFilter _activeLengthFilter = LengthFilter.Any;
+    private bool _updatingLengthToken;
+    // Sentinel IDs identify length chips so they are excluded from the real tag filter
+    private static readonly Guid LengthShortId  = new("00000000-0000-0000-0000-000000000001");
+    private static readonly Guid LengthMediumId = new("00000000-0000-0000-0000-000000000002");
+    private static readonly Guid LengthLongId   = new("00000000-0000-0000-0000-000000000003");
 
     public LibraryCardPage()
     {
@@ -155,6 +165,9 @@ public sealed partial class LibraryCardPage : Page
         NotStartedFilterCheckBox.IsChecked = false;
         CompletedFilterCheckBox.IsChecked = false;
 
+        _activeLengthFilter = LengthFilter.Any;
+        SetLengthButtonUI(LengthFilter.Any);
+
         ViewModel.ClearSelectedTags();
         ViewModel.SearchText = string.Empty;
         if (AudiobookSearchBox != null) AudiobookSearchBox.Text = string.Empty;
@@ -163,13 +176,15 @@ public sealed partial class LibraryCardPage : Page
     }
 
     /// <summary>
-    ///     Single unified filter: applies progress, tag (OR), and search-text filters together
+    ///     Single unified filter: applies progress, length, tag (OR), and search-text filters together
     ///     from the master AudiobooksForFilter list, then updates ViewModel.Audiobooks.
     /// </summary>
     private async Task ApplyFiltersAsync()
     {
         var searchText = ViewModel.SearchText;
-        var hasTagFilter = ViewModel.SelectedTags.Count > 0;
+        // Exclude sentinel length chips from the real tag filter
+        var realTags = ViewModel.SelectedTags.Where(t => !IsLengthFilterTag(t)).ToList();
+        var hasTagFilter = realTags.Count > 0;
         var hasProgressFilter = _activeFilters.Count > 0;
         var hasSearch = !string.IsNullOrEmpty(searchText);
 
@@ -186,7 +201,20 @@ public sealed partial class LibraryCardPage : Page
         if (hasTagFilter)
         {
             source = source.Where(a =>
-                a.Model.Tags.Any(t => ViewModel.SelectedTags.Any(s => s.Id == t.Id)));
+                a.Model.Tags.Any(t => realTags.Any(s => s.Id == t.Id)));
+        }
+
+        if (_activeLengthFilter != LengthFilter.Any)
+        {
+            const long shortMax  = 6L  * 3600L;  // 21 600 s
+            const long mediumMax = 15L * 3600L;  // 54 000 s
+            source = _activeLengthFilter switch
+            {
+                LengthFilter.Short  => source.Where(a => a.Duration > 0 && a.Duration < shortMax),
+                LengthFilter.Medium => source.Where(a => a.Duration >= shortMax && a.Duration <= mediumMax),
+                LengthFilter.Long   => source.Where(a => a.Duration > mediumMax),
+                _                   => source
+            };
         }
 
         List<AudiobookViewModel> results;
@@ -835,6 +863,7 @@ public sealed partial class LibraryCardPage : Page
 
     private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
     {
+        if (_updatingLengthToken) return;
         await ApplyFiltersAsync();
     }
 
@@ -894,6 +923,12 @@ public sealed partial class LibraryCardPage : Page
 
     private async void AudiobookSearchBox_TokenItemRemoved(TokenizingTextBox sender, object args)
     {
+        // If the user hit X on a length chip, reset the length filter (token already gone).
+        if (args is Tag removedTag && IsLengthFilterTag(removedTag))
+        {
+            await SetLengthFilter(LengthFilter.Any, updateToken: false);
+            return;
+        }
         // AppShell syncs the nav-pane ListView via SelectedTagsOnCollectionChanged.
         await ApplyFiltersAsync();
     }
@@ -975,6 +1010,77 @@ public sealed partial class LibraryCardPage : Page
             AudiobookSearchBox.Text = string.Empty;
         await ApplyFiltersAsync();
     }
+
+    #endregion
+
+    #region Length filter
+
+    private bool IsLengthFilterTag(Tag t) =>
+        t.Id == LengthShortId || t.Id == LengthMediumId || t.Id == LengthLongId;
+
+    private void RemoveLengthFilterTokens()
+    {
+        var toRemove = ViewModel.SelectedTags.Where(IsLengthFilterTag).ToList();
+        foreach (var t in toRemove) ViewModel.SelectedTags.Remove(t);
+    }
+
+    private void SetLengthButtonUI(LengthFilter filter)
+    {
+        if (LengthAnyItem == null) return;
+
+        LengthAnyItem.IsChecked    = filter == LengthFilter.Any;
+        LengthShortItem.IsChecked  = filter == LengthFilter.Short;
+        LengthMediumItem.IsChecked = filter == LengthFilter.Medium;
+        LengthLongItem.IsChecked   = filter == LengthFilter.Long;
+
+        if (filter != LengthFilter.Any)
+        {
+            LengthButton.BorderBrush     = new SolidColorBrush((Color)Application.Current.Resources["SystemAccentColor"]);
+            LengthButton.BorderThickness = new Thickness(2);
+        }
+        else
+        {
+            LengthButton.BorderBrush     = new SolidColorBrush(Colors.Transparent);
+            LengthButton.BorderThickness = new Thickness(0);
+        }
+    }
+
+    private async Task SetLengthFilter(LengthFilter filter, bool updateToken = true)
+    {
+        _activeLengthFilter = filter;
+        SetLengthButtonUI(filter);
+
+        if (updateToken)
+        {
+            _updatingLengthToken = true;
+            try
+            {
+                RemoveLengthFilterTokens();
+                if (filter != LengthFilter.Any)
+                {
+                    var (label, id) = filter switch
+                    {
+                        LengthFilter.Short  => ("< 6h",     LengthShortId),
+                        LengthFilter.Medium => ("6h – 15h", LengthMediumId),
+                        LengthFilter.Long   => ("> 15h",    LengthLongId),
+                        _                   => (string.Empty, Guid.Empty)
+                    };
+                    ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
+                }
+            }
+            finally
+            {
+                _updatingLengthToken = false;
+            }
+        }
+
+        await ApplyFiltersAsync();
+    }
+
+    private async void LengthAny_OnClick(object sender, RoutedEventArgs e)    => await SetLengthFilter(LengthFilter.Any);
+    private async void LengthShort_OnClick(object sender, RoutedEventArgs e)  => await SetLengthFilter(LengthFilter.Short);
+    private async void LengthMedium_OnClick(object sender, RoutedEventArgs e) => await SetLengthFilter(LengthFilter.Medium);
+    private async void LengthLong_OnClick(object sender, RoutedEventArgs e)   => await SetLengthFilter(LengthFilter.Long);
 
     #endregion
 }

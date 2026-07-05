@@ -119,15 +119,41 @@
                     <!-- Right buttons -->
                 </Grid.ColumnDefinitions>
 
-                <!-- Left-aligned buttons -->
+                <!-- Left-aligned buttons: Sort, Status, Length -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="0">
+
+                    <!-- Sort button -->
+                    <AppBarButton
+                        Icon="Sort"
+                        Label="Sort"
+                        ToolTipService.ToolTip="Sort Audiobooks"
+                        x:Name="SortButton">
+                        <AppBarButton.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortAlphabeticalItem"
+                                    Click="SortAlphabetical_OnClick"
+                                    IsChecked="True"
+                                    Text="Alphabetical" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortByDateImportedItem"
+                                    Click="SortByDateImported_OnClick"
+                                    Text="Date imported" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="SortByLastPlayedItem"
+                                    Click="SortByLastPlayed_OnClick"
+                                    Text="Last played" />
+                            </MenuFlyout>
+                        </AppBarButton.Flyout>
+                    </AppBarButton>
+
+                    <!-- Status (progress filter) button -->
                     <AppBarButton
                         Icon="Filter"
-                        Label="Filter"
-                        ToolTipService.ToolTip="Filter Audiobooks"
+                        Label="Status"
+                        ToolTipService.ToolTip="Filter by Status"
                         x:Name="FilterButton">
                         <AppBarButton.Flyout>
-                            <!--  create custom filter checkbox flyout  -->
                             <Flyout Placement="BottomEdgeAlignedLeft">
                                 <StackPanel Orientation="Vertical">
                                     <CheckBox
@@ -160,36 +186,36 @@
                         </AppBarButton.Flyout>
                     </AppBarButton>
 
-                    <!-- Sort button -->
+                    <!-- Length filter button -->
                     <AppBarButton
-                        Icon="Sort"
-                        Label="Sort"
-                        ToolTipService.ToolTip="Sort Audiobooks"
-                        x:Name="SortButton">
+                        Label="Length"
+                        ToolTipService.ToolTip="Filter by Length"
+                        x:Name="LengthButton">
+                        <AppBarButton.Icon>
+                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE823;" />
+                        </AppBarButton.Icon>
                         <AppBarButton.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedLeft">
                                 <ToggleMenuFlyoutItem
-                                    x:Name="SortAlphabeticalItem"
-                                    Click="SortAlphabetical_OnClick"
+                                    x:Name="LengthAnyItem"
+                                    Click="LengthAny_OnClick"
                                     IsChecked="True"
-                                    Text="Alphabetical" />
+                                    Text="Any Length" />
                                 <ToggleMenuFlyoutItem
-                                    x:Name="SortByDateImportedItem"
-                                    Click="SortByDateImported_OnClick"
-                                    Text="Date imported" />
+                                    x:Name="LengthShortItem"
+                                    Click="LengthShort_OnClick"
+                                    Text="Short (&lt; 6h)" />
                                 <ToggleMenuFlyoutItem
-                                    x:Name="SortByLastPlayedItem"
-                                    Click="SortByLastPlayed_OnClick"
-                                    Text="Last played" />
+                                    x:Name="LengthMediumItem"
+                                    Click="LengthMedium_OnClick"
+                                    Text="Medium (6h – 15h)" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="LengthLongItem"
+                                    Click="LengthLong_OnClick"
+                                    Text="Long (&gt; 15h)" />
                             </MenuFlyout>
                         </AppBarButton.Flyout>
                     </AppBarButton>
-
-                    <AppBarButton
-                        Click="{x:Bind RefreshButton_OnClick}"
-                        Icon="Refresh"
-                        Label="Refresh"
-                        ToolTipService.ToolTip="Refresh audiobooks" />
 
                     <AppBarSeparator />
                 </StackPanel>
@@ -222,7 +248,7 @@
                     </controls:TokenizingTextBox.TokenItemTemplate>
                 </controls:TokenizingTextBox>
 
-                <!-- Right-aligned buttons -->
+                <!-- Right-aligned buttons: Import, Refresh, Zoom -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0">
                     <AppBarSeparator />
 
@@ -256,20 +282,11 @@
                         </AppBarButton.Flyout>
                     </AppBarButton>
 
-                    <AppBarButton Label="Export" ToolTipService.ToolTip="Export audiobooks">
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xEDE1;" />
-                        <AppBarButton.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                <MenuFlyoutItem Click="{x:Bind ViewModel.CreateExportFile}" Text="Export audiobooks in library to JSON file for later import">
-                                    <MenuFlyoutItem.Icon>
-                                        <FontIcon Glyph="&#xEDE1;" />
-                                    </MenuFlyoutItem.Icon>
-                                </MenuFlyoutItem>
-                            </MenuFlyout>
-                        </AppBarButton.Flyout>
-                    </AppBarButton>
-
-                    <AppBarSeparator />
+                    <AppBarButton
+                        Click="{x:Bind RefreshButton_OnClick}"
+                        Icon="Refresh"
+                        Label="Refresh"
+                        ToolTipService.ToolTip="Refresh audiobooks" />
 
                     <AppBarButton
                         Icon="Zoom"
