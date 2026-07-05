@@ -58,7 +58,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="100" />
+                <ColumnDefinition Width="70" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -77,23 +77,28 @@
 
             <userControls:CoverImageTile
                 Canvas.ZIndex="10"
-                CoverImageRadius="6"
-                CoverImageSize="60"
+                CoverImageRadius="5"
+                CoverImageSize="44"
                 Grid.Column="1"
                 HorizontalAlignment="Center"
                 ToolTipService.ToolTip="{x:Bind PlayerViewModel.NowPlaying.Title, Mode=OneWay}"
                 VerticalAlignment="Center" />
 
-            <userControls:TitleArtistStack
-                ArtistFontSize="12"
+            <StackPanel
                 Grid.Column="2"
-                HorizontalAlignment="Center"
                 Margin="8,0,0,0"
-                ShowPlaybackSpeed="True"
-                Spacing="4"
-                TitleFontSize="16"
-                TitleMaxWidth="100"
-                VerticalAlignment="Top" />
+                Orientation="Vertical"
+                Spacing="2"
+                VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind PlayerViewModel.ChapterRemainingText, Mode=OneWay}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind PlayerViewModel.PlaybackSpeedText, Mode=OneWay}" />
+            </StackPanel>
 
             <userControls:PlaySkipButtonsStack
                 Grid.Column="3"
