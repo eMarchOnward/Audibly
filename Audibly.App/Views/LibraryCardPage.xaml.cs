@@ -481,13 +481,13 @@ public sealed partial class LibraryCardPage : Page
 
         var addTagButtons = new Dictionary<string, Button>();
         var removeTagButtons = new Dictionary<string, Button>();
-        StackPanel? addTagStrip = null;
-        StackPanel? removeTagStrip = null;
+        CommunityToolkit.WinUI.Controls.WrapPanel? addTagStrip = null;
+        CommunityToolkit.WinUI.Controls.WrapPanel? removeTagStrip = null;
 
         if (allTags.Count > 0)
         {
-            addTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            removeTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            addTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
+            removeTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
 
             foreach (var tag in allTags)
             {
@@ -533,21 +533,14 @@ public sealed partial class LibraryCardPage : Page
             };
         }
 
-        StackPanel BuildSection(string title, StackPanel? strip, CommunityToolkit.WinUI.Controls.TokenizingTextBox tagsBox)
+        StackPanel BuildSection(string title, Panel? strip, CommunityToolkit.WinUI.Controls.TokenizingTextBox tagsBox)
         {
             var section = new StackPanel { Spacing = 8 };
             section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
             if (strip != null)
             {
                 section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
-                section.Children.Add(new ScrollViewer
-                {
-                    Content = strip,
-                    HorizontalScrollMode = ScrollMode.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    VerticalScrollMode = ScrollMode.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
-                });
+                section.Children.Add(strip);
             }
             section.Children.Add(tagsBox);
             return section;

@@ -639,13 +639,13 @@ public sealed partial class AudiobookTile : UserControl
         // --- Tag strips (one per section) ---
         var addTagButtons = new Dictionary<string, Button>();
         var removeTagButtons = new Dictionary<string, Button>();
-        StackPanel? addTagStrip = null;
-        StackPanel? removeTagStrip = null;
+        CommunityToolkit.WinUI.Controls.WrapPanel? addTagStrip = null;
+        CommunityToolkit.WinUI.Controls.WrapPanel? removeTagStrip = null;
 
         if (allTags.Count > 0)
         {
-            addTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            removeTagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            addTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
+            removeTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
 
             foreach (var tag in allTags)
             {
@@ -692,7 +692,7 @@ public sealed partial class AudiobookTile : UserControl
         }
 
         // --- Layout helpers ---
-        StackPanel BuildSection(string title, StackPanel? strip, TokenizingTextBox tagsBox)
+        StackPanel BuildSection(string title, Panel? strip, TokenizingTextBox tagsBox)
         {
             var section = new StackPanel { Spacing = 8 };
             section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
@@ -700,14 +700,7 @@ public sealed partial class AudiobookTile : UserControl
             if (strip != null)
             {
                 section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
-                section.Children.Add(new ScrollViewer
-                {
-                    Content = strip,
-                    HorizontalScrollMode = ScrollMode.Auto,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    VerticalScrollMode = ScrollMode.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
-                });
+                section.Children.Add(strip);
             }
 
             section.Children.Add(tagsBox);
@@ -885,7 +878,7 @@ public sealed partial class AudiobookTile : UserControl
 
             // Map NormalizedName → Button so CollectionChanged can toggle visibility
             var tagButtons = new Dictionary<string, Button>();
-            var tagStrip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            var tagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
             foreach (var tag in allTags.OrderBy(t => t.Name))
             {
                 var capturedTag = tag;
@@ -920,14 +913,7 @@ public sealed partial class AudiobookTile : UserControl
                             btn.Visibility = Visibility.Visible;
             };
 
-            tagsSection.Children.Add(new ScrollViewer
-            {
-                Content = tagStrip,
-                HorizontalScrollMode = ScrollMode.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollMode = ScrollMode.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Hidden
-            });
+            tagsSection.Children.Add(tagStrip);
 
             tagsSection.Children.Add(new TextBlock
             {
