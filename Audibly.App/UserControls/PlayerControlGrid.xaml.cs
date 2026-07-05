@@ -196,22 +196,8 @@ public sealed partial class PlayerControlGrid : UserControl
 
     private void CustomTimerMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        // Create the popup
         var timerPopup = new CustomTimerPopup();
-
-        // Find the timer button and position the popup above it
-
-        // get timer button's position using its x:name
-        var timerButton = TimerButton;
-        if (timerButton == null)
-        {
-            // Fallback if the button is not found
-            timerPopup.Show(XamlRoot);
-            return;
-        }
-
-        // Show the popup above the button
-        timerPopup.ShowAbove(timerButton, XamlRoot);
+        timerPopup.Show(XamlRoot);
     }
 
     private void CancelTimerMenuItem_Click(object sender, RoutedEventArgs e)
