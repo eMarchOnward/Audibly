@@ -149,37 +149,40 @@
 
                     <!-- Status (progress filter) button -->
                     <AppBarButton
-                        Icon="Filter"
                         Label="Status"
                         ToolTipService.ToolTip="Filter by Status"
                         x:Name="FilterButton">
+                        <Grid Width="40">
+                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE71C;" FontSize="20" HorizontalAlignment="Center" />
+                            <Ellipse
+                                x:Name="StatusFilterDot"
+                                Width="8" Height="8"
+                                Fill="Red"
+                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Visibility="Collapsed" />
+                        </Grid>
                         <AppBarButton.Flyout>
                             <Flyout Placement="BottomEdgeAlignedLeft">
-                                <StackPanel Orientation="Vertical">
+                                <StackPanel Orientation="Vertical" Spacing="2">
+                                    <HyperlinkButton
+                                        Click="ResetStatusFilters_OnClick"
+                                        Content="Reset"
+                                        Padding="0,2,0,4"
+                                        x:Name="ResetStatusLink" />
                                     <CheckBox
-                                        Checked="SelectAllFiltersCheckBox_OnChecked"
-                                        Content="Select all"
-                                        Indeterminate="SelectAllFiltersCheckBox_OnIndeterminate"
-                                        IsThreeState="True"
-                                        Unchecked="SelectAllFiltersCheckBox_OnUnchecked"
-                                        x:Name="SelectAllFiltersCheckBox" />
-                                    <CheckBox
-                                        Checked="InProgressFilterCheckBox_OnChecked"
-                                        Content="In Progress"
-                                        Margin="24,0,0,0"
-                                        Unchecked="InProgressFilterCheckBox_OnUnchecked"
-                                        x:Name="InProgressFilterCheckBox" />
-                                    <CheckBox
-                                        Checked="NotStartedFilterCheckBox_OnChecked"
+                                        Checked="StatusFilterCheckBox_OnToggled"
                                         Content="Not Started"
-                                        Margin="24,0,0,0"
-                                        Unchecked="NotStartedFilterCheckBox_OnUnchecked"
+                                        Unchecked="StatusFilterCheckBox_OnToggled"
                                         x:Name="NotStartedFilterCheckBox" />
                                     <CheckBox
-                                        Checked="CompletedFilterCheckBox_OnChecked"
+                                        Checked="StatusFilterCheckBox_OnToggled"
+                                        Content="In Progress"
+                                        Unchecked="StatusFilterCheckBox_OnToggled"
+                                        x:Name="InProgressFilterCheckBox" />
+                                    <CheckBox
+                                        Checked="StatusFilterCheckBox_OnToggled"
                                         Content="Completed"
-                                        Margin="24,0,0,0"
-                                        Unchecked="CompletedFilterCheckBox_OnUnchecked"
+                                        Unchecked="StatusFilterCheckBox_OnToggled"
                                         x:Name="CompletedFilterCheckBox" />
                                 </StackPanel>
                             </Flyout>
@@ -191,9 +194,15 @@
                         Label="Length"
                         ToolTipService.ToolTip="Filter by Length"
                         x:Name="LengthButton">
-                        <AppBarButton.Icon>
-                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE823;" />
-                        </AppBarButton.Icon>
+                        <Grid Width="40">
+                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE823;" FontSize="20" HorizontalAlignment="Center" />
+                            <Ellipse
+                                x:Name="LengthFilterDot"
+                                Width="8" Height="8"
+                                Fill="Red"
+                                HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Visibility="Collapsed" />
+                        </Grid>
                         <AppBarButton.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedLeft">
                                 <ToggleMenuFlyoutItem
@@ -451,7 +460,7 @@
                             ItemsJustification="Start"
                             ItemsStretch="Uniform"
                             MinColumnSpacing="4"
-                            MinRowSpacing="12" />
+                            MinRowSpacing="6" />
                     </ItemsRepeater.Layout>
                 </ItemsRepeater>
                 <Rectangle Height="200" Opacity="0" />

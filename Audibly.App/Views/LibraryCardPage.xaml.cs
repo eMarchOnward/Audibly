@@ -70,6 +70,13 @@ public sealed partial class LibraryCardPage : Page
     private static readonly Guid LengthMediumId = new("00000000-0000-0000-0000-000000000002");
     private static readonly Guid LengthLongId   = new("00000000-0000-0000-0000-000000000003");
 
+    // Status filter token sentinels
+    private bool _updatingStatusToken;
+    private bool _suppressCheckboxHandlers;
+    private static readonly Guid StatusInProgressId = new("00000000-0000-0000-0000-000000000011");
+    private static readonly Guid StatusNotStartedId = new("00000000-0000-0000-0000-000000000012");
+    private static readonly Guid StatusCompletedId  = new("00000000-0000-0000-0000-000000000013");
+
     public LibraryCardPage()
     {
         InitializeComponent();
@@ -101,9 +108,9 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     public PlayerViewModel PlayerViewModel => App.PlayerViewModel;
 
-    private void ViewModelOnResetFilters()
+    private async void ViewModelOnResetFilters()
     {
-        SelectAllFiltersCheckBox.IsChecked = false;
+        await ResetStatusFiltersAsync();
     }
 
     private async void LibraryCardPage_Loaded(object sender, RoutedEventArgs e)
@@ -161,9 +168,12 @@ public sealed partial class LibraryCardPage : Page
     {
         _activeFilters.Clear();
 
+        _suppressCheckboxHandlers = true;
         InProgressFilterCheckBox.IsChecked = false;
         NotStartedFilterCheckBox.IsChecked = false;
         CompletedFilterCheckBox.IsChecked = false;
+        _suppressCheckboxHandlers = false;
+        SetCheckedState();
 
         _activeLengthFilter = LengthFilter.Any;
         SetLengthButtonUI(LengthFilter.Any);
@@ -182,8 +192,8 @@ public sealed partial class LibraryCardPage : Page
     private async Task ApplyFiltersAsync()
     {
         var searchText = ViewModel.SearchText;
-        // Exclude sentinel length chips from the real tag filter
-        var realTags = ViewModel.SelectedTags.Where(t => !IsLengthFilterTag(t)).ToList();
+        // Exclude sentinel filter chips (length, status) from the real tag filter
+        var realTags = ViewModel.SelectedTags.Where(t => !IsFilterToken(t)).ToList();
         var hasTagFilter = realTags.Count > 0;
         var hasProgressFilter = _activeFilters.Count > 0;
         var hasSearch = !string.IsNullOrEmpty(searchText);
@@ -192,10 +202,12 @@ public sealed partial class LibraryCardPage : Page
 
         if (hasProgressFilter)
         {
+            // InProgress and NotStarted share the same threshold (> 2 / <= 2) so they
+            // partition the non-completed set with no gap.
             source = source.Where(a =>
-                (_activeFilters.Contains(AudioBookFilter.InProgress) && a.Progress > 2 && !a.IsCompleted) ||
-                (_activeFilters.Contains(AudioBookFilter.NotStarted) && a.Progress == 0 && !a.IsCompleted) ||
-                (_activeFilters.Contains(AudioBookFilter.Completed) && a.IsCompleted));
+                (_activeFilters.Contains(AudioBookFilter.InProgress) && a.Progress > 2  && !a.IsCompleted) ||
+                (_activeFilters.Contains(AudioBookFilter.NotStarted) && a.Progress <= 2 && !a.IsCompleted) ||
+                (_activeFilters.Contains(AudioBookFilter.Completed)  && a.IsCompleted));
         }
 
         if (hasTagFilter)
@@ -257,14 +269,15 @@ public sealed partial class LibraryCardPage : Page
 
     private void SetCheckedState()
     {
-        // Controls are null the first time this is called, so we just 
+        // Controls are null the first time this is called, so we just
         // need to perform a null check on any one of the controls.
-        if (InProgressFilterCheckBox == null) return;
+        if (InProgressFilterCheckBox == null || FilterButton == null) return;
 
-        // check if any of the filters are checked and change the appbar button background color
-        if (InProgressFilterCheckBox.IsChecked == true ||
-            NotStartedFilterCheckBox.IsChecked == true ||
-            CompletedFilterCheckBox.IsChecked == true)
+        // Border and dot reflect whether filtering is actually in effect —
+        // all three checked is equivalent to none checked (show everything).
+        var isFilterActive = _activeFilters.Count > 0;
+
+        if (isFilterActive)
         {
             FilterButton.BorderBrush = new SolidColorBrush((Color)Application.Current.Resources["SystemAccentColor"]);
             FilterButton.BorderThickness = new Thickness(2);
@@ -275,90 +288,67 @@ public sealed partial class LibraryCardPage : Page
             FilterButton.BorderThickness = new Thickness(0);
         }
 
-        if (InProgressFilterCheckBox.IsChecked == true &&
-            NotStartedFilterCheckBox.IsChecked == true &&
-            CompletedFilterCheckBox.IsChecked == true)
-            SelectAllFiltersCheckBox.IsChecked = true;
-        else if (InProgressFilterCheckBox.IsChecked == false &&
-                 NotStartedFilterCheckBox.IsChecked == false &&
-                 CompletedFilterCheckBox.IsChecked == false)
-            SelectAllFiltersCheckBox.IsChecked = false;
-        else
-            // Set third state (indeterminate) by setting IsChecked to null.
-            SelectAllFiltersCheckBox.IsChecked = null;
+        if (StatusFilterDot != null)
+            StatusFilterDot.Visibility = isFilterActive ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async void InProgressFilterCheckBox_OnChecked(object sender, RoutedEventArgs e)
+    /// <summary>
+    ///     Derives the effective status filter set, search-bar chips, and button UI from the
+    ///     three checkbox states. Checking all three is equivalent to checking none: everything
+    ///     is shown and no chips or indicators are displayed.
+    /// </summary>
+    private async Task SyncStatusFiltersAsync()
     {
+        var checkedFilters = new List<AudioBookFilter>();
+        if (NotStartedFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.NotStarted);
+        if (InProgressFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.InProgress);
+        if (CompletedFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.Completed);
+
+        var noFilter = checkedFilters.Count == 0 || checkedFilters.Count == 3;
+
+        _activeFilters.Clear();
+        if (!noFilter)
+            foreach (var f in checkedFilters)
+                _activeFilters.Add(f);
+
+        _updatingStatusToken = true;
+        try
+        {
+            foreach (var f in new[] { AudioBookFilter.NotStarted, AudioBookFilter.InProgress, AudioBookFilter.Completed })
+            {
+                if (_activeFilters.Contains(f)) AddStatusFilterToken(f);
+                else RemoveStatusFilterToken(f);
+            }
+        }
+        finally
+        {
+            _updatingStatusToken = false;
+        }
+
         SetCheckedState();
-
-        _activeFilters.Add(AudioBookFilter.InProgress);
-
         await ApplyFiltersAsync();
     }
 
-    private async void NotStartedFilterCheckBox_OnChecked(object sender, RoutedEventArgs e)
+    private async void StatusFilterCheckBox_OnToggled(object sender, RoutedEventArgs e)
     {
-        SetCheckedState();
-
-        _activeFilters.Add(AudioBookFilter.NotStarted);
-
-        await ApplyFiltersAsync();
+        if (_suppressCheckboxHandlers) return;
+        await SyncStatusFiltersAsync();
     }
 
-    private async void CompletedFilterCheckBox_OnChecked(object sender, RoutedEventArgs e)
+    private async Task ResetStatusFiltersAsync()
     {
-        SetCheckedState();
-
-        _activeFilters.Add(AudioBookFilter.Completed);
-
-        await ApplyFiltersAsync();
+        if (InProgressFilterCheckBox == null) return;
+        _suppressCheckboxHandlers = true;
+        NotStartedFilterCheckBox.IsChecked = false;
+        InProgressFilterCheckBox.IsChecked = false;
+        CompletedFilterCheckBox.IsChecked = false;
+        _suppressCheckboxHandlers = false;
+        await SyncStatusFiltersAsync();
     }
 
-    private async void InProgressFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
+    private async void ResetStatusFilters_OnClick(object sender, RoutedEventArgs e)
     {
-        SetCheckedState();
-
-        _activeFilters.Remove(AudioBookFilter.InProgress);
-
-        await ApplyFiltersAsync();
-    }
-
-    private async void NotStartedFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
-    {
-        SetCheckedState();
-
-        _activeFilters.Remove(AudioBookFilter.NotStarted);
-
-        await ApplyFiltersAsync();
-    }
-
-    private async void CompletedFilterCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
-    {
-        SetCheckedState();
-
-        _activeFilters.Remove(AudioBookFilter.Completed);
-
-        await ApplyFiltersAsync();
-    }
-
-    private async void SelectAllFiltersCheckBox_OnChecked(object sender, RoutedEventArgs e)
-    {
-        InProgressFilterCheckBox.IsChecked =
-            NotStartedFilterCheckBox.IsChecked = CompletedFilterCheckBox.IsChecked = true;
-    }
-
-    private async void SelectAllFiltersCheckBox_OnUnchecked(object sender, RoutedEventArgs e)
-    {
-        InProgressFilterCheckBox.IsChecked =
-            NotStartedFilterCheckBox.IsChecked = CompletedFilterCheckBox.IsChecked = false;
-    }
-
-    private void SelectAllFiltersCheckBox_OnIndeterminate(object sender, RoutedEventArgs e)
-    {
-        if (InProgressFilterCheckBox.IsChecked == true && NotStartedFilterCheckBox.IsChecked == true &&
-            CompletedFilterCheckBox.IsChecked == true)
-            SelectAllFiltersCheckBox.IsChecked = false;
+        await ResetStatusFiltersAsync();
     }
 
     private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
@@ -863,7 +853,7 @@ public sealed partial class LibraryCardPage : Page
 
     private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
     {
-        if (_updatingLengthToken) return;
+        if (_updatingLengthToken || _updatingStatusToken) return;
         await ApplyFiltersAsync();
     }
 
@@ -923,14 +913,65 @@ public sealed partial class LibraryCardPage : Page
 
     private async void AudiobookSearchBox_TokenItemRemoved(TokenizingTextBox sender, object args)
     {
-        // If the user hit X on a length chip, reset the length filter (token already gone).
-        if (args is Tag removedTag && IsLengthFilterTag(removedTag))
+        // Programmatic chip removal (filter state changed via flyout) — already handled there.
+        if (_updatingStatusToken || _updatingLengthToken) return;
+
+        try
         {
-            await SetLengthFilter(LengthFilter.Any, updateToken: false);
-            return;
+            if (args is Tag removedTag)
+            {
+                // Length chip dismissed — reset length filter (token already removed by the control)
+                if (IsLengthFilterTag(removedTag))
+                {
+                    await SetLengthFilter(LengthFilter.Any, updateToken: false);
+                    return;
+                }
+
+                // Status chip dismissed — uncheck the matching checkbox and re-filter
+                var statusFilter = GetStatusFilterForTag(removedTag);
+                if (statusFilter.HasValue)
+                {
+                    await RemoveStatusFilter(statusFilter.Value);
+                    return;
+                }
+            }
+            // AppShell syncs the nav-pane ListView via SelectedTagsOnCollectionChanged.
+            await ApplyFiltersAsync();
         }
-        // AppShell syncs the nav-pane ListView via SelectedTagsOnCollectionChanged.
-        await ApplyFiltersAsync();
+        finally
+        {
+            // The TokenizingTextBox can drop extra chips during successive removals
+            // (container recycling resolves the wrong item; selected chips are mass-removed).
+            // After the control settles, restore any chips whose filters are still active.
+            _dispatcherQueue.TryEnqueue(ReconcileFilterChips);
+        }
+    }
+
+    /// <summary>
+    ///     Re-adds any filter chips that should be present per the current filter state but are
+    ///     missing from the search box. Filter state is the source of truth; this heals chips the
+    ///     TokenizingTextBox removed spuriously. No-op when everything is consistent.
+    /// </summary>
+    private void ReconcileFilterChips()
+    {
+        _updatingStatusToken = true;
+        _updatingLengthToken = true;
+        try
+        {
+            foreach (var f in new[] { AudioBookFilter.NotStarted, AudioBookFilter.InProgress, AudioBookFilter.Completed })
+            {
+                if (_activeFilters.Contains(f)) AddStatusFilterToken(f);
+                else RemoveStatusFilterToken(f);
+            }
+
+            if (_activeLengthFilter == LengthFilter.Any) RemoveLengthFilterTokens();
+            else AddLengthFilterToken(_activeLengthFilter);
+        }
+        finally
+        {
+            _updatingStatusToken = false;
+            _updatingLengthToken = false;
+        }
     }
 
     /// <summary>
@@ -1013,15 +1054,88 @@ public sealed partial class LibraryCardPage : Page
 
     #endregion
 
+    #region Status filter tokens
+
+    private bool IsStatusFilterTag(Tag t) =>
+        t.Id == StatusInProgressId || t.Id == StatusNotStartedId || t.Id == StatusCompletedId;
+
+    private AudioBookFilter? GetStatusFilterForTag(Tag t) =>
+        t.Id == StatusInProgressId ? AudioBookFilter.InProgress :
+        t.Id == StatusNotStartedId ? AudioBookFilter.NotStarted :
+        t.Id == StatusCompletedId  ? AudioBookFilter.Completed :
+        (AudioBookFilter?)null;
+
+    private void AddStatusFilterToken(AudioBookFilter filter)
+    {
+        var (label, id) = filter switch
+        {
+            AudioBookFilter.InProgress => ("In Progress", StatusInProgressId),
+            AudioBookFilter.NotStarted => ("Not Started", StatusNotStartedId),
+            AudioBookFilter.Completed  => ("Completed",   StatusCompletedId),
+            _                          => (string.Empty,  Guid.Empty)
+        };
+        if (string.IsNullOrEmpty(label)) return;
+        if (!ViewModel.SelectedTags.Any(t => t.Id == id))
+            ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
+    }
+
+    private void RemoveStatusFilterToken(AudioBookFilter filter)
+    {
+        var id = filter switch
+        {
+            AudioBookFilter.InProgress => StatusInProgressId,
+            AudioBookFilter.NotStarted => StatusNotStartedId,
+            AudioBookFilter.Completed  => StatusCompletedId,
+            _                          => Guid.Empty
+        };
+        var existing = ViewModel.SelectedTags.FirstOrDefault(t => t.Id == id);
+        if (existing != null) ViewModel.SelectedTags.Remove(existing);
+    }
+
+    // Called when the user dismisses a status chip via X. The control has already removed
+    // the chip from SelectedTags, so SyncStatusFiltersAsync's token add/removes are all
+    // no-ops here — it must not mutate SelectedTags while the TokenizingTextBox is still
+    // processing the X-click, or the control mis-removes a different chip from its display.
+    private async Task RemoveStatusFilter(AudioBookFilter filter)
+    {
+        _suppressCheckboxHandlers = true;
+        switch (filter)
+        {
+            case AudioBookFilter.InProgress: InProgressFilterCheckBox.IsChecked = false; break;
+            case AudioBookFilter.NotStarted: NotStartedFilterCheckBox.IsChecked = false; break;
+            case AudioBookFilter.Completed:  CompletedFilterCheckBox.IsChecked  = false; break;
+        }
+        _suppressCheckboxHandlers = false;
+        await SyncStatusFiltersAsync();
+    }
+
+    #endregion
+
     #region Length filter
 
     private bool IsLengthFilterTag(Tag t) =>
         t.Id == LengthShortId || t.Id == LengthMediumId || t.Id == LengthLongId;
 
+    private bool IsFilterToken(Tag t) => IsLengthFilterTag(t) || IsStatusFilterTag(t);
+
     private void RemoveLengthFilterTokens()
     {
         var toRemove = ViewModel.SelectedTags.Where(IsLengthFilterTag).ToList();
         foreach (var t in toRemove) ViewModel.SelectedTags.Remove(t);
+    }
+
+    private void AddLengthFilterToken(LengthFilter filter)
+    {
+        var (label, id) = filter switch
+        {
+            LengthFilter.Short  => ("< 6h",     LengthShortId),
+            LengthFilter.Medium => ("6h – 15h", LengthMediumId),
+            LengthFilter.Long   => ("> 15h",    LengthLongId),
+            _                   => (string.Empty, Guid.Empty)
+        };
+        if (id == Guid.Empty) return;
+        if (!ViewModel.SelectedTags.Any(t => t.Id == id))
+            ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
     }
 
     private void SetLengthButtonUI(LengthFilter filter)
@@ -1043,6 +1157,9 @@ public sealed partial class LibraryCardPage : Page
             LengthButton.BorderBrush     = new SolidColorBrush(Colors.Transparent);
             LengthButton.BorderThickness = new Thickness(0);
         }
+
+        if (LengthFilterDot != null)
+            LengthFilterDot.Visibility = (filter != LengthFilter.Any) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async Task SetLengthFilter(LengthFilter filter, bool updateToken = true)
@@ -1057,16 +1174,7 @@ public sealed partial class LibraryCardPage : Page
             {
                 RemoveLengthFilterTokens();
                 if (filter != LengthFilter.Any)
-                {
-                    var (label, id) = filter switch
-                    {
-                        LengthFilter.Short  => ("< 6h",     LengthShortId),
-                        LengthFilter.Medium => ("6h – 15h", LengthMediumId),
-                        LengthFilter.Long   => ("> 15h",    LengthLongId),
-                        _                   => (string.Empty, Guid.Empty)
-                    };
-                    ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
-                }
+                    AddLengthFilterToken(filter);
             }
             finally
             {

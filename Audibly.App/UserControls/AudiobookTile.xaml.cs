@@ -15,6 +15,7 @@ using Audibly.App.ViewModels;
 using Audibly.Models;
 using CommunityToolkit.WinUI;
 using CommunityToolkit.WinUI.Controls;
+using CommunityToolkit.WinUI.Media;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -177,8 +178,14 @@ public sealed partial class AudiobookTile : UserControl
     private void AudiobookTile_OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         BlackOverlayGrid.Visibility = Visibility.Visible;
-        ButtonTile.Background =
-            new SolidColorBrush(ColorHelper.ToColor("#393939")); // Change background to indicate hover
+        ButtonTile.Background = new SolidColorBrush(ColorHelper.ToColor("#393939"));
+        if (!IsSelected)
+        {
+            ButtonTile.BorderBrush = new SolidColorBrush(ColorHelper.ToColor("#707070"));
+            ButtonTile.BorderThickness = new Thickness(2);
+        }
+        if (Effects.GetShadow(CoverShadowBorder) is AttachedCardShadow shadow)
+            shadow.Offset = "6, 6";
     }
 
     private void AudiobookTile_OnPointerExited(object sender, PointerRoutedEventArgs e)
@@ -192,6 +199,13 @@ public sealed partial class AudiobookTile : UserControl
             if (flyout?.IsOpen == true || GetMultiSelectMenuFlyout()?.IsOpen == true) return;
             BlackOverlayGrid.Visibility = Visibility.Collapsed;
             ButtonTile.Background = new SolidColorBrush(Colors.Transparent);
+            if (!IsSelected)
+            {
+                ButtonTile.BorderBrush = new SolidColorBrush(Colors.Transparent);
+                ButtonTile.BorderThickness = new Thickness(0);
+            }
+            if (Effects.GetShadow(CoverShadowBorder) is AttachedCardShadow shadow)
+                shadow.Offset = "4, 4";
         });
     }
 
@@ -283,6 +297,13 @@ public sealed partial class AudiobookTile : UserControl
     {
         BlackOverlayGrid.Visibility = Visibility.Collapsed;
         ButtonTile.Background = new SolidColorBrush(Colors.Transparent);
+        if (!IsSelected)
+        {
+            ButtonTile.BorderBrush = new SolidColorBrush(Colors.Transparent);
+            ButtonTile.BorderThickness = new Thickness(0);
+        }
+        if (Effects.GetShadow(CoverShadowBorder) is AttachedCardShadow shadow)
+            shadow.Offset = "4, 4";
     }
 
     private void ButtonTile_Click(object sender, RoutedEventArgs e)
