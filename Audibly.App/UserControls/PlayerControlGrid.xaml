@@ -61,7 +61,7 @@
             <!--  Cover Image  -->
             <local:CoverImageTile
                 CoverImageRadius="10"
-                CoverImageSize="112"
+                CoverImageSize="96"
                 Grid.Column="0"
                 Grid.RowSpan="3"
                 Visibility="{x:Bind ShowCoverImage, Mode=OneWay}"
@@ -86,7 +86,10 @@
                     Orientation="Horizontal"
                     VerticalAlignment="Top">
 
-                    <local:TitleArtistStack TitleMaxWidth="230" ShowPlaybackSpeed="True" />
+                    <local:TitleArtistStack
+                        ShowPlaybackSpeed="True"
+                        Spacing="2"
+                        TitleMaxWidth="230" />
 
                     <!--  separator and chapter selection  -->
                     <StackPanel Orientation="Horizontal">
@@ -304,16 +307,20 @@
             </Grid>
 
             <!--  play & skip buttons  -->
+            <!--  Negative margins pull the buttons up into the dead space below the
+                  chapter dropdown (row 0 is taller than the dropdown because of the
+                  three-line TitleArtistStack) and tighten the gap to the seek bar.  -->
             <local:PlaySkipButtonsStack
                 Grid.Column="1"
                 Grid.Row="1"
-                HorizontalAlignment="Center" />
+                HorizontalAlignment="Center"
+                Margin="0,-12,0,-6" />
 
             <!--  now playing bar  -->
             <local:NowPlayingBar
                 Grid.Column="1"
                 Grid.Row="2"
-                Margin="0,0,0,-4"
+                Margin="0,-4,0,-4"
                 VerticalAlignment="Bottom" />
         </Grid>
     </Grid>

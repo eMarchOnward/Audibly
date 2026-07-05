@@ -41,7 +41,11 @@ public sealed partial class TitleArtistStack : UserControl
     {
         InitializeComponent();
         TitleMarqueeText.MarqueeCompleted += TitleMarqueeText_MarqueeCompleted;
-        Unloaded += (_, _) => _marqueeCts.Cancel();
+        Unloaded += (_, _) =>
+        {
+            TitleMarqueeText.MarqueeCompleted -= TitleMarqueeText_MarqueeCompleted;
+            _marqueeCts.Cancel();
+        };
         // CurrentChapterTitleMarqueeText.MarqueeCompleted += CurrentChapterTitleMarqueeText_MarqueeCompleted;
     }
 
@@ -88,12 +92,15 @@ public sealed partial class TitleArtistStack : UserControl
 
     private async void TitleMarqueeText_MarqueeCompleted(object? sender, EventArgs e)
     {
+        if (_marqueeCts.IsCancellationRequested)
+            return;
+
         _dispatcherQueue.TryEnqueue(() => TitleMarqueeText.StopMarquee());
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(5), _marqueeCts.Token);
         }
-        catch (OperationCanceledException)
+        catch (Exception) when (_marqueeCts.IsCancellationRequested)
         {
             return;
         }

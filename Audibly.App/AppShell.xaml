@@ -221,7 +221,7 @@
                     x:Name="Player"
                     MaxHeight="250"
                     Margin="12,0,12,12"
-                    Padding="12"
+                    Padding="12,8"
                     Background="{ThemeResource AcrylicBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
                     BorderThickness="1"
