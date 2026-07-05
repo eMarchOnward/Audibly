@@ -58,7 +58,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="70" />
+                <ColumnDefinition Width="60" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -86,17 +86,17 @@
 
             <StackPanel
                 Grid.Column="2"
-                Margin="8,0,0,0"
+                Margin="4,0,0,0"
                 Orientation="Vertical"
                 Spacing="2"
                 VerticalAlignment="Center">
                 <TextBlock
-                    FontSize="12"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                     Text="{x:Bind PlayerViewModel.ChapterRemainingText, Mode=OneWay}" />
                 <TextBlock
-                    FontSize="12"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                     Text="{x:Bind PlayerViewModel.PlaybackSpeedText, Mode=OneWay}" />
             </StackPanel>
 
@@ -350,6 +350,7 @@
                     BorderThickness="0"
                     Click="BackToLibraryButton_Click"
                     HorizontalAlignment="Right"
+                    Padding="8,5,4,6"
                     ToolTipService.ToolTip="Back to Library"
                     VerticalAlignment="Center"
                     x:Name="BackToLibraryButton"
