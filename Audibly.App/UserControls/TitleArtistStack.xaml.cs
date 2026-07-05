@@ -2,6 +2,7 @@
 // Updated: 08/02/2025
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Audibly.App.ViewModels;
 using Microsoft.UI.Dispatching;
@@ -32,6 +33,7 @@ public sealed partial class TitleArtistStack : UserControl
         nameof(ShowPlaybackSpeed), typeof(bool), typeof(TitleArtistStack), new PropertyMetadata(false));
 
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
+    private CancellationTokenSource _marqueeCts = new();
 
     private bool _isPointerOver;
 
@@ -39,6 +41,7 @@ public sealed partial class TitleArtistStack : UserControl
     {
         InitializeComponent();
         TitleMarqueeText.MarqueeCompleted += TitleMarqueeText_MarqueeCompleted;
+        Unloaded += (_, _) => _marqueeCts.Cancel();
         // CurrentChapterTitleMarqueeText.MarqueeCompleted += CurrentChapterTitleMarqueeText_MarqueeCompleted;
     }
 
@@ -86,7 +89,14 @@ public sealed partial class TitleArtistStack : UserControl
     private async void TitleMarqueeText_MarqueeCompleted(object? sender, EventArgs e)
     {
         _dispatcherQueue.TryEnqueue(() => TitleMarqueeText.StopMarquee());
-        await Task.Delay(TimeSpan.FromSeconds(5)); // wait for 3 seconds
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), _marqueeCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
         _dispatcherQueue.TryEnqueue(() => TitleMarqueeText.StartMarquee());
     }
 

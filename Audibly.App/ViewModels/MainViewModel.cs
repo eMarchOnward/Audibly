@@ -1093,7 +1093,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 12.6,
-                    AuthorFontSize = 9.8,
+                    AuthorFontSize = 11.2,
                     TitleMaxWidth = 100,
                     PlayButtonHeightWidth = 35,
                     ProgressIndicatorTextFontSize = 10,
@@ -1107,7 +1107,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 16.2,
-                    AuthorFontSize = 12.6,
+                    AuthorFontSize = 14.0,
                     TitleMaxWidth = 120,
                     PlayButtonHeightWidth = 42,
                     ProgressIndicatorTextFontSize = 12,
@@ -1121,7 +1121,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 16.2,
-                    AuthorFontSize = 12.6,
+                    AuthorFontSize = 14.0,
                     TitleMaxWidth = 140,
                     PlayButtonHeightWidth = 49,
                     ProgressIndicatorTextFontSize = 14,
@@ -1135,7 +1135,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 18,
-                    AuthorFontSize = 14,
+                    AuthorFontSize = 15.4,
                     TitleMaxWidth = 160,
                     PlayButtonHeightWidth = 56,
                     ProgressIndicatorTextFontSize = 16,
@@ -1149,7 +1149,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 18,
-                    AuthorFontSize = 14,
+                    AuthorFontSize = 15.4,
                     TitleMaxWidth = 180,
                     PlayButtonHeightWidth = 63,
                     ProgressIndicatorTextFontSize = 18,
@@ -1163,7 +1163,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 18,
-                    AuthorFontSize = 14,
+                    AuthorFontSize = 15.4,
                     TitleMaxWidth = 200,
                     PlayButtonHeightWidth = 70,
                     ProgressIndicatorTextFontSize = 20,
@@ -1177,7 +1177,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 19.8,
-                    AuthorFontSize = 15.4,
+                    AuthorFontSize = 16.8,
                     TitleMaxWidth = 220,
                     PlayButtonHeightWidth = 77,
                     ProgressIndicatorTextFontSize = 22,
@@ -1191,7 +1191,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 21.6,
-                    AuthorFontSize = 16.8,
+                    AuthorFontSize = 18.2,
                     TitleMaxWidth = 240,
                     PlayButtonHeightWidth = 84,
                     ProgressIndicatorTextFontSize = 24,
@@ -1205,7 +1205,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 23.4,
-                    AuthorFontSize = 18.2,
+                    AuthorFontSize = 19.6,
                     TitleMaxWidth = 260,
                     PlayButtonHeightWidth = 91,
                     ProgressIndicatorTextFontSize = 26,
@@ -1219,7 +1219,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 25.2,
-                    AuthorFontSize = 19.6,
+                    AuthorFontSize = 21.0,
                     TitleMaxWidth = 280,
                     PlayButtonHeightWidth = 98,
                     ProgressIndicatorTextFontSize = 28,
@@ -1233,7 +1233,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 27,
-                    AuthorFontSize = 21,
+                    AuthorFontSize = 22.4,
                     TitleMaxWidth = 300,
                     PlayButtonHeightWidth = 105,
                     ProgressIndicatorTextFontSize = 30,
@@ -1247,7 +1247,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 28.8,
-                    AuthorFontSize = 22.4,
+                    AuthorFontSize = 23.8,
                     TitleMaxWidth = 320,
                     PlayButtonHeightWidth = 112,
                     ProgressIndicatorTextFontSize = 32,
@@ -1261,7 +1261,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 30.6,
-                    AuthorFontSize = 23.8,
+                    AuthorFontSize = 25.2,
                     TitleMaxWidth = 340,
                     PlayButtonHeightWidth = 119,
                     ProgressIndicatorTextFontSize = 34,
@@ -1275,7 +1275,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 32.4,
-                    AuthorFontSize = 25.2,
+                    AuthorFontSize = 26.6,
                     TitleMaxWidth = 360,
                     PlayButtonHeightWidth = 126,
                     ProgressIndicatorTextFontSize = 36,
@@ -1289,7 +1289,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 34.2,
-                    AuthorFontSize = 26.6,
+                    AuthorFontSize = 28.0,
                     TitleMaxWidth = 380,
                     PlayButtonHeightWidth = 133,
                     ProgressIndicatorTextFontSize = 38,
@@ -1303,7 +1303,7 @@ public class MainViewModel : BindableBase
                 new AudiobookTileSize
                 {
                     TitleFontSize = 36,
-                    AuthorFontSize = 28,
+                    AuthorFontSize = 29.4,
                     TitleMaxWidth = 400,
                     PlayButtonHeightWidth = 140,
                     ProgressIndicatorTextFontSize = 40,
