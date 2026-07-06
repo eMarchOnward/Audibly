@@ -212,11 +212,12 @@ public static class DialogService
         });
     }
 
-    internal static async Task ShowMoreInfoDialogAsync(AudiobookViewModel audiobookViewModel)
+    internal static async Task<bool> ShowMoreInfoDialogAsync(AudiobookViewModel audiobookViewModel)
     {
         var xamlRoot = GetXamlRoot();
-        if (xamlRoot == null) return;
+        if (xamlRoot == null) return false;
 
+        var editRequested = false;
         await _dispatcherQueue.EnqueueAsync(async () =>
         {
             var moreInfoDialog = new MoreInfoDialogContent(audiobookViewModel);
@@ -231,11 +232,13 @@ public static class DialogService
                 MinWidth = moreInfoDialog.ActualWidth
             };
 
-            // todo: decide if I want to use this
-            // contentDialog.Background = (Brush)Application.Current.Resources["AcrylicBackgroundFillColorBaseBrush"];
+            moreInfoDialog.SetParentDialog(contentDialog);
 
             await contentDialog.ShowOneAtATimeAsync();
+            editRequested = moreInfoDialog.EditDetailsRequested;
         });
+
+        return editRequested;
     }
 
     internal static async Task ShowProgressDialogAsync(string title, CancellationTokenSource? cts,

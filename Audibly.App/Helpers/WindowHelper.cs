@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Windows.Graphics;
 using Windows.Storage;
 using Audibly.App.Extensions;
 using Audibly.App.Views;
@@ -72,11 +73,59 @@ public static class WindowHelper
 
         miniPlayerWindow.Activate();
         miniPlayerWindow.AppWindow.IsShownInSwitchers = true;
-        
+
         miniPlayerWindow.AppWindow.Title = "Audibly — Audiobook Player";
         miniPlayerWindow.AppWindow.SetIcon("Assets/logo.ico");
-        
+
+        // Restore saved position (validated against current monitors)
+        RestoreMiniPlayerPosition(miniPlayerWindow);
+
+        // Save position whenever the mini-player window closes
+        miniPlayerWindow.AppWindow.Closing += (_, _) => SaveMiniPlayerPosition();
+
         HideMainWindow();
+    }
+
+    public static void SaveMiniPlayerPosition()
+    {
+        ActiveWindows.TryGetValue("MiniPlayerWindow", out var miniPlayerWindow);
+        if (miniPlayerWindow == null) return;
+
+        var pos = miniPlayerWindow.AppWindow.Position;
+        UserSettings.MiniPlayerX = pos.X;
+        UserSettings.MiniPlayerY = pos.Y;
+    }
+
+    private static void RestoreMiniPlayerPosition(Window miniPlayerWindow)
+    {
+        var savedX = UserSettings.MiniPlayerX;
+        var savedY = UserSettings.MiniPlayerY;
+
+        if (savedX == int.MinValue || savedY == int.MinValue) return;
+
+        var size = miniPlayerWindow.AppWindow.Size;
+        var centerX = savedX + size.Width / 2;
+        var centerY = savedY + size.Height / 2;
+
+        // Verify the center of the window lands on at least one connected monitor.
+        // This handles the case where a monitor was disconnected since the position was last saved.
+        // Note: DisplayArea.FindAll() returns a WinRT list that fails on LINQ enumeration
+        // (InvalidCastException in the IEnumerable projection), so iterate by index.
+        var isOnScreen = false;
+        var displayAreas = DisplayArea.FindAll();
+        for (var i = 0; i < displayAreas.Count; i++)
+        {
+            var bounds = displayAreas[i].OuterBounds;
+            if (centerX >= bounds.X && centerX < bounds.X + bounds.Width &&
+                centerY >= bounds.Y && centerY < bounds.Y + bounds.Height)
+            {
+                isOnScreen = true;
+                break;
+            }
+        }
+
+        if (isOnScreen)
+            miniPlayerWindow.AppWindow.Move(new PointInt32(savedX, savedY));
     }
 
     public static void HideMiniPlayer()
@@ -91,6 +140,7 @@ public static class WindowHelper
     {
         ActiveWindows.TryGetValue("MiniPlayerWindow", out var miniPlayerWindow);
         if (miniPlayerWindow == null) return;
+        SaveMiniPlayerPosition();
         miniPlayerWindow.Close();
     }
 

@@ -100,10 +100,15 @@ public sealed partial class TitleArtistStack : UserControl
         {
             await Task.Delay(TimeSpan.FromSeconds(5), _marqueeCts.Token);
         }
-        catch (Exception) when (_marqueeCts.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Control is unloading / app is closing — nothing to restart
             return;
         }
+
+        if (_marqueeCts.IsCancellationRequested)
+            return;
+
         _dispatcherQueue.TryEnqueue(() => TitleMarqueeText.StartMarquee());
     }
 

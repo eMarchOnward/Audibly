@@ -35,7 +35,7 @@
                     <FontIcon Glyph="&#xE70F;" />
                 </MenuFlyoutItem.Icon>
             </MenuFlyoutItem>
-            <MenuFlyoutItem Click="ChangeCover_OnClick" Text="Change Cover">
+            <MenuFlyoutItem Click="RefreshCover_OnClick" Text="Refresh Cover">
                 <MenuFlyoutItem.Icon>
                     <FontIcon Glyph="&#xEB9F;" />
                 </MenuFlyoutItem.Icon>

@@ -285,6 +285,50 @@ public static class UserSettings
         set => ApplicationData.Current.LocalSettings.Values["WindowY"] = value;
     }
 
+    public static int MiniPlayerX
+    {
+        get
+        {
+            try
+            {
+                var val = ApplicationData.Current.LocalSettings.Values["MiniPlayerX"];
+                if (val != null)
+                    if (int.TryParse(val.ToString(), out var result))
+                        return result;
+
+                return int.MinValue; // MinValue indicates no saved position
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return int.MinValue;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["MiniPlayerX"] = value;
+    }
+
+    public static int MiniPlayerY
+    {
+        get
+        {
+            try
+            {
+                var val = ApplicationData.Current.LocalSettings.Values["MiniPlayerY"];
+                if (val != null)
+                    if (int.TryParse(val.ToString(), out var result))
+                        return result;
+
+                return int.MinValue; // MinValue indicates no saved position
+            }
+            catch (Exception e)
+            {
+                SentrySdk.CaptureException(e);
+                return int.MinValue;
+            }
+        }
+        set => ApplicationData.Current.LocalSettings.Values["MiniPlayerY"] = value;
+    }
+
     public static int SkipBackSeconds
     {
         get

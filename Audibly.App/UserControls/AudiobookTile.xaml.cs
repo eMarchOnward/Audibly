@@ -278,7 +278,7 @@ public sealed partial class AudiobookTile : UserControl
             {
                 var currentAudiobook = PlayerViewModel.NowPlaying;
                 if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
-                    await PlayerViewModel.OpenAudiobook(audiobook);
+                    if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
                 PlayerViewModel.MediaPlayer.Play();
             });
         }
@@ -362,88 +362,85 @@ public sealed partial class AudiobookTile : UserControl
         await ViewModel.DeleteAudiobookAsync();
     }
 
-    private async void ChangeCover_OnClick(object sender, RoutedEventArgs e)
+    private async void RefreshCover_OnClick(object sender, RoutedEventArgs e)
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
+        await RefreshCoverFromFolderAsync(audiobook);
+    }
 
-        // Show file picker for supported image formats
-        var supportedImageTypes = new List<string> { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp" };
-        var selectedFile = ViewModel.FileDialogService.OpenFileDialog(supportedImageTypes, PickerLocationId.PicturesLibrary);
+    private async Task ApplyCoverImageAsync(AudiobookViewModel audiobook, byte[] imageBytesArray, string? sourceFileName = null)
+    {
+        // Salt the hash with ticks so the new cover gets a unique path — the WinUI Image
+        // control caches bitmaps by URI and will not reload if the path is unchanged.
+        var hash = $"{audiobook.Model.Title}{audiobook.Model.Author}{audiobook.Model.Composer}{DateTime.UtcNow.Ticks}".GetSha256Hash();
 
-        if (selectedFile == null) return; // User cancelled
+        if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
+            await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
+
+        var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytesArray);
+
+        if (!string.IsNullOrEmpty(coverImagePath))
+        {
+            audiobook.Model.CoverImagePath = coverImagePath;
+            audiobook.Model.ThumbnailPath = thumbnailPath;
+            audiobook.IsModified = true;
+            await audiobook.SaveAsync();
+            audiobook.RefreshCoverImage();
+
+            var now = PlayerViewModel.NowPlaying;
+            if (now != null && now.Id == audiobook.Id)
+            {
+                now.Model.CoverImagePath = coverImagePath;
+                now.Model.ThumbnailPath = thumbnailPath;
+                now.RefreshCoverImage();
+            }
+
+            var message = sourceFileName != null
+                ? $"Found file {sourceFileName}."
+                : "Cover image updated successfully!";
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = message,
+                Severity = InfoBarSeverity.Success
+            });
+        }
+        else
+        {
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "Failed to update cover image.",
+                Severity = InfoBarSeverity.Error
+            });
+        }
+    }
+
+    private async Task RefreshCoverFromFolderAsync(AudiobookViewModel audiobook)
+    {
+        var firstPath = audiobook.SourcePaths?.FirstOrDefault()?.FilePath;
+        var folder = firstPath != null ? Path.GetDirectoryName(firstPath) : null;
+
+        var (imageBytes, fileName) = FileImportService.TryGetFolderCoverBytes(folder);
+        if (imageBytes == null)
+        {
+            ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "No image files found in the audiobook folder.",
+                Severity = InfoBarSeverity.Warning
+            });
+            return;
+        }
 
         try
         {
-            // Read the selected image file
-            var imageBytes = await FileIO.ReadBufferAsync(selectedFile);
-            var imageBytesArray = new byte[imageBytes.Length];
-            using (var reader = DataReader.FromBuffer(imageBytes))
-            {
-                reader.ReadBytes(imageBytesArray);
-            }
-
-            // Generate the folder hash using the same method as FileImportService
-            // This ensures we're updating the correct folder location
-            var hash = $"{audiobook.Model.Title}{audiobook.Model.Author}{audiobook.Model.Composer}".GetSha256Hash();
-
-            // Delete old cover images first
-            if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
-            {
-                await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
-            }
-
-            // Create new cover image and thumbnail using WriteCoverImageAsync
-            // This handles 1:1 cropping automatically
-            var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytesArray);
-
-            if (!string.IsNullOrEmpty(coverImagePath))
-            {
-                // Update the audiobook model with new cover paths
-                audiobook.Model.CoverImagePath = coverImagePath;
-                audiobook.Model.ThumbnailPath = thumbnailPath;
-
-                // Mark the audiobook as modified so SaveAsync will actually save
-                audiobook.IsModified = true;
-
-                // Save the updated audiobook to database
-                await audiobook.SaveAsync();
-
-                // Force refresh of cover image properties in the UI
-                audiobook.RefreshCoverImage();
-
-                // If the edited audiobook is currently playing, update NowPlaying cover
-                var now = PlayerViewModel.NowPlaying;
-                if (now != null && now.Id == audiobook.Id)
-                {
-                    now.Model.CoverImagePath = audiobook.Model.CoverImagePath;
-                    now.Model.ThumbnailPath = audiobook.Model.ThumbnailPath;
-                    now.RefreshCoverImage();
-                }
-
-                // Show success notification
-                ViewModel.EnqueueNotification(new Notification
-                {
-                    Message = "Cover image updated successfully!",
-                    Severity = InfoBarSeverity.Success
-                });
-            }
-            else
-            {
-                // Show error notification
-                ViewModel.EnqueueNotification(new Notification
-                {
-                    Message = "Failed to update cover image.",
-                    Severity = InfoBarSeverity.Error
-                });
-            }
+            await ApplyCoverImageAsync(audiobook, imageBytes, fileName);
         }
         catch (Exception ex)
         {
             ViewModel.LoggingService.LogError(ex, true);
             ViewModel.EnqueueNotification(new Notification
             {
-                Message = "An error occurred while updating the cover image.",
+                Message = "An error occurred while refreshing the cover image.",
                 Severity = InfoBarSeverity.Error
             });
         }
@@ -479,8 +476,9 @@ public sealed partial class AudiobookTile : UserControl
         var flyout = GetMenuFlyout();
         flyout?.Hide();
 
-        // note: content dialog
-        await DialogService.ShowMoreInfoDialogAsync(audiobook);
+        var editRequested = await DialogService.ShowMoreInfoDialogAsync(audiobook);
+        if (editRequested)
+            await ShowEditDialogForAsync(audiobook);
     }
 
     private async void MarkAsCompleted_OnClick(object sender, RoutedEventArgs e)
@@ -812,6 +810,11 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
+        await ShowEditDialogForAsync(audiobook);
+    }
+
+    private async Task ShowEditDialogForAsync(AudiobookViewModel audiobook)
+    {
         ViewModel.SelectedAudiobook = audiobook;
 
         var allTags = await App.Repository.Audiobooks.GetAllTagsAsync();
@@ -823,16 +826,75 @@ public sealed partial class AudiobookTile : UserControl
             NormalizedName = t.NormalizedName
         }));
 
-        var thumbnail = new Image
-        {
-            Width = 96,
-            Height = 96,
-            Stretch = Stretch.UniformToFill
-        };
-        thumbnail.SetBinding(Image.SourceProperty, new Microsoft.UI.Xaml.Data.Binding
+        var coverImg = new Image { Width = 96, Height = 96, Stretch = Stretch.UniformToFill };
+        coverImg.SetBinding(Image.SourceProperty, new Microsoft.UI.Xaml.Data.Binding
         {
             Path = new PropertyPath("SelectedAudiobook.ThumbnailPath")
         });
+
+        var hoverOverlay = new Grid
+        {
+            Width = 96,
+            Height = 96,
+            Background = new SolidColorBrush(ColorHelper.ToColor("#8C000000")),
+            IsHitTestVisible = false,
+            Opacity = 0
+        };
+        hoverOverlay.Children.Add(new FontIcon
+        {
+            Glyph = "",
+            FontSize = 22,
+            Foreground = new SolidColorBrush(Colors.White),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var coverGrid = new Grid { Width = 96, Height = 96 };
+        coverGrid.Children.Add(coverImg);
+        coverGrid.Children.Add(hoverOverlay);
+
+        var coverButton = new Button
+        {
+            Content = coverGrid,
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(4),
+            Background = new SolidColorBrush(Colors.Transparent)
+        };
+        ToolTipService.SetToolTip(coverButton, "Click to change cover");
+        coverButton.PointerEntered += (_, _) => hoverOverlay.Opacity = 1;
+        coverButton.PointerExited += (_, _) => hoverOverlay.Opacity = 0;
+        coverButton.Click += async (_, _) =>
+        {
+            var supportedImageTypes = new List<string> { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp" };
+            // Start the picker in the audiobook's source folder — the most likely home for new cover art
+            var sourceFolder = Path.GetDirectoryName(audiobook.SourcePaths?.FirstOrDefault()?.FilePath);
+            var selectedPath = ViewModel.FileDialogService.OpenFileDialogInFolder(supportedImageTypes, sourceFolder, "Images");
+            if (selectedPath == null) return;
+            try
+            {
+                var bytes = await File.ReadAllBytesAsync(selectedPath);
+                await ApplyCoverImageAsync(audiobook, bytes);
+            }
+            catch (Exception ex)
+            {
+                ViewModel.LoggingService.LogError(ex, true);
+                ViewModel.EnqueueNotification(new Notification { Message = "Failed to update cover image.", Severity = InfoBarSeverity.Error });
+            }
+        };
+
+        var refreshLink = new HyperlinkButton
+        {
+            Content = "Refresh from folder",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(0, 2, 0, 0),
+            FontSize = 12
+        };
+        refreshLink.Click += async (_, _) => await RefreshCoverFromFolderAsync(audiobook);
+
+        var coverPanel = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+        coverPanel.Children.Add(coverButton);
+        coverPanel.Children.Add(refreshLink);
 
         var titleBox = new TextBox { Header = "Title" };
         titleBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
@@ -962,8 +1024,8 @@ public sealed partial class AudiobookTile : UserControl
         var grid = new Grid { ColumnSpacing = 12 };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(thumbnail, 0);
-        grid.Children.Add(thumbnail);
+        Grid.SetColumn(coverPanel, 0);
+        grid.Children.Add(coverPanel);
         Grid.SetColumn(fieldsPanel, 1);
         grid.Children.Add(fieldsPanel);
 
@@ -1041,7 +1103,7 @@ public sealed partial class AudiobookTile : UserControl
                 var currentAudiobook = PlayerViewModel.NowPlaying;
                 if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
                 {
-                    await PlayerViewModel.OpenAudiobook(audiobook);
+                    if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
                 }
 
                 // Start playing
@@ -1070,7 +1132,7 @@ public sealed partial class AudiobookTile : UserControl
             // Load the audiobook if it's not already loaded or if it's a different one
             if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
             {
-                await PlayerViewModel.OpenAudiobook(audiobook);
+                if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
             }
 
             // Always start playing

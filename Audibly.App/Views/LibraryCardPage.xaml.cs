@@ -44,7 +44,7 @@ public sealed partial class LibraryCardPage : Page
         Completed
     }
 
-    private enum LengthFilter { Any, Short, Medium, Long }
+    private enum LengthFilter { Any, Short, Medium, Long, Custom }
 
     #endregion
 
@@ -65,10 +65,14 @@ public sealed partial class LibraryCardPage : Page
     // Length filter state
     private LengthFilter _activeLengthFilter = LengthFilter.Any;
     private bool _updatingLengthToken;
+    // Custom length filter bounds in hours (null = no bound on that side)
+    private double? _customLengthMinHours;
+    private double? _customLengthMaxHours;
     // Sentinel IDs identify length chips so they are excluded from the real tag filter
     private static readonly Guid LengthShortId  = new("00000000-0000-0000-0000-000000000001");
     private static readonly Guid LengthMediumId = new("00000000-0000-0000-0000-000000000002");
     private static readonly Guid LengthLongId   = new("00000000-0000-0000-0000-000000000003");
+    private static readonly Guid LengthCustomId = new("00000000-0000-0000-0000-000000000004");
 
     // Status filter token sentinels
     private bool _updatingStatusToken;
@@ -219,12 +223,15 @@ public sealed partial class LibraryCardPage : Page
         if (_activeLengthFilter != LengthFilter.Any)
         {
             const long shortMax  = 6L  * 3600L;  // 21 600 s
-            const long mediumMax = 15L * 3600L;  // 54 000 s
+            const long mediumMax = 17L * 3600L;  // 61 200 s
+            var customMinSec = (_customLengthMinHours ?? 0) * 3600.0;
+            var customMaxSec = (_customLengthMaxHours ?? double.MaxValue) * 3600.0;
             source = _activeLengthFilter switch
             {
                 LengthFilter.Short  => source.Where(a => a.Duration > 0 && a.Duration < shortMax),
                 LengthFilter.Medium => source.Where(a => a.Duration >= shortMax && a.Duration <= mediumMax),
                 LengthFilter.Long   => source.Where(a => a.Duration > mediumMax),
+                LengthFilter.Custom => source.Where(a => a.Duration > 0 && a.Duration >= customMinSec && a.Duration <= customMaxSec),
                 _                   => source
             };
         }
@@ -1114,7 +1121,7 @@ public sealed partial class LibraryCardPage : Page
     #region Length filter
 
     private bool IsLengthFilterTag(Tag t) =>
-        t.Id == LengthShortId || t.Id == LengthMediumId || t.Id == LengthLongId;
+        t.Id == LengthShortId || t.Id == LengthMediumId || t.Id == LengthLongId || t.Id == LengthCustomId;
 
     private bool IsFilterToken(Tag t) => IsLengthFilterTag(t) || IsStatusFilterTag(t);
 
@@ -1124,16 +1131,30 @@ public sealed partial class LibraryCardPage : Page
         foreach (var t in toRemove) ViewModel.SelectedTags.Remove(t);
     }
 
+    private static string FormatHours(double hours) => hours.ToString("0.##");
+
+    private string GetCustomLengthLabel()
+    {
+        if (_customLengthMinHours.HasValue && _customLengthMaxHours.HasValue)
+            return $"{FormatHours(_customLengthMinHours.Value)}h - {FormatHours(_customLengthMaxHours.Value)}h";
+        if (_customLengthMinHours.HasValue)
+            return $"> {FormatHours(_customLengthMinHours.Value)}h";
+        if (_customLengthMaxHours.HasValue)
+            return $"< {FormatHours(_customLengthMaxHours.Value)}h";
+        return string.Empty;
+    }
+
     private void AddLengthFilterToken(LengthFilter filter)
     {
         var (label, id) = filter switch
         {
             LengthFilter.Short  => ("< 6h",     LengthShortId),
-            LengthFilter.Medium => ("6h – 15h", LengthMediumId),
-            LengthFilter.Long   => ("> 15h",    LengthLongId),
+            LengthFilter.Medium => ("6h – 17h", LengthMediumId),
+            LengthFilter.Long   => ("> 17h",    LengthLongId),
+            LengthFilter.Custom => (GetCustomLengthLabel(), LengthCustomId),
             _                   => (string.Empty, Guid.Empty)
         };
-        if (id == Guid.Empty) return;
+        if (id == Guid.Empty || label.Length == 0) return;
         if (!ViewModel.SelectedTags.Any(t => t.Id == id))
             ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
     }
@@ -1146,6 +1167,7 @@ public sealed partial class LibraryCardPage : Page
         LengthShortItem.IsChecked  = filter == LengthFilter.Short;
         LengthMediumItem.IsChecked = filter == LengthFilter.Medium;
         LengthLongItem.IsChecked   = filter == LengthFilter.Long;
+        LengthCustomItem.IsChecked = filter == LengthFilter.Custom;
 
         if (filter != LengthFilter.Any)
         {
@@ -1189,6 +1211,77 @@ public sealed partial class LibraryCardPage : Page
     private async void LengthShort_OnClick(object sender, RoutedEventArgs e)  => await SetLengthFilter(LengthFilter.Short);
     private async void LengthMedium_OnClick(object sender, RoutedEventArgs e) => await SetLengthFilter(LengthFilter.Medium);
     private async void LengthLong_OnClick(object sender, RoutedEventArgs e)   => await SetLengthFilter(LengthFilter.Long);
+
+    private async void LengthCustom_OnClick(object sender, RoutedEventArgs e)
+    {
+        var minBox = new TextBox
+        {
+            Width = 80,
+            PlaceholderText = "any",
+            Text = _customLengthMinHours.HasValue ? FormatHours(_customLengthMinHours.Value) : string.Empty
+        };
+        var maxBox = new TextBox
+        {
+            Width = 80,
+            PlaceholderText = "any",
+            Text = _customLengthMaxHours.HasValue ? FormatHours(_customLengthMaxHours.Value) : string.Empty
+        };
+
+        var inputRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        inputRow.Children.Add(new TextBlock { Text = "Min", VerticalAlignment = VerticalAlignment.Center });
+        inputRow.Children.Add(minBox);
+        inputRow.Children.Add(new TextBlock { Text = "to Max", VerticalAlignment = VerticalAlignment.Center });
+        inputRow.Children.Add(maxBox);
+
+        var content = new StackPanel { Spacing = 12 };
+        content.Children.Add(new TextBlock
+        {
+            Text = "Show only audiobooks whose length falls in this range, in hours. " +
+                   "Decimals are allowed (e.g. 7.5). Leave a field blank for no limit on that side.",
+            TextWrapping = TextWrapping.Wrap
+        });
+        content.Children.Add(inputRow);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Custom Length Filter",
+            Content = content,
+            PrimaryButtonText = "OK",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            // Cancelled — restore the checkmarks the toggle click just changed
+            SetLengthButtonUI(_activeLengthFilter);
+            return;
+        }
+
+        double? min = double.TryParse(minBox.Text, out var minVal) && minVal >= 0 ? minVal : null;
+        double? max = double.TryParse(maxBox.Text, out var maxVal) && maxVal >= 0 ? maxVal : null;
+
+        // Nothing usable entered — treat like cancel
+        if (min == null && max == null)
+        {
+            SetLengthButtonUI(_activeLengthFilter);
+            return;
+        }
+
+        // Swap if the user reversed the bounds
+        if (min.HasValue && max.HasValue && min > max)
+            (min, max) = (max, min);
+
+        _customLengthMinHours = min;
+        _customLengthMaxHours = max;
+        await SetLengthFilter(LengthFilter.Custom);
+    }
 
     #endregion
 }

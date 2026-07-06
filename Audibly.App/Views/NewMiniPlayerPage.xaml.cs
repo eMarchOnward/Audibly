@@ -78,27 +78,41 @@ public sealed partial class NewMiniPlayerPage : Page
         // Request focus so that KeyDown will fire when the page is visible.
         // If another control must keep focus, consider using KeyboardAccelerators instead.
         _ = this.Focus(FocusState.Programmatic);
-        
+
         // Sync the volume and playback speed sliders with current ViewModel values
         if (VolumeLevelSlider != null)
             VolumeLevelSlider.Value = PlayerViewModel.VolumeLevel;
         if (PlaybackSpeedSlider != null)
             PlaybackSpeedSlider.Value = PlayerViewModel.PlaybackSpeed;
+
+        PlayerViewModel.PlaybackFailed += OnPlaybackFailed;
     }
 
     private void NewMiniPlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
         // Clean up handlers attached at Loaded time.
         this.KeyDown -= NewMiniPlayerPage_KeyDown;
-        
+
         // Clean up cancellation token source
         _playbackSpeedFlyoutCts?.Cancel();
         _playbackSpeedFlyoutCts?.Dispose();
         _playbackSpeedFlyoutCts = null;
-        
+
         // Clean up global keyboard hook
         _globalKeyboardHook?.Dispose();
         _globalKeyboardHook = null;
+
+        PlayerViewModel.PlaybackFailed -= OnPlaybackFailed;
+    }
+
+    private void OnPlaybackFailed(object? sender, EventArgs e)
+    {
+        _ = _dispatcherQueue.EnqueueAsync(async () =>
+        {
+            PlaybackFailedTip.IsOpen = true;
+            await Task.Delay(2000);
+            PlaybackFailedTip.IsOpen = false;
+        });
     }
 
     private void NewMiniPlayerPage_KeyDown(object sender, KeyRoutedEventArgs args)

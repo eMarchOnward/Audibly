@@ -118,15 +118,32 @@
                 <Run Text="{x:Bind AudiobookViewModel.DurationStr}" />
             </TextBlock>
 
-            <!--  release date text block  -->
+            <!--  date imported text block  -->
             <TextBlock
                 FontSize="14"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 Style="{StaticResource BodyTextBlockStyle}"
-                x:Name="ReleaseDateText">
-                <Run FontWeight="Bold">Release Date:</Run>
-                <Run Text="{x:Bind AudiobookViewModel.ReleaseDate}" />
+                x:Name="DateImportedText">
+                <Run FontWeight="Bold">Date Imported:</Run>
+                <Run Text="{x:Bind DateImportedStr}" />
             </TextBlock>
+
+            <!--  last played text block  -->
+            <TextBlock
+                FontSize="14"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                x:Name="LastPlayedText">
+                <Run FontWeight="Bold">Last Played:</Run>
+                <Run Text="{x:Bind DateLastPlayedStr}" />
+            </TextBlock>
+
+            <HyperlinkButton
+                Click="EditDetails_OnClick"
+                Content="Edit Details"
+                Margin="0,6,0,0"
+                Padding="0"
+                x:Name="EditDetailsLink" />
 
         </StackPanel>
         <ScrollViewer
@@ -135,6 +152,19 @@
             HorizontalAlignment="Left"
             Margin="0,10,0,0">
             <StackPanel>
+                <!--  folder path text block  -->
+                <TextBlock
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Margin="0,0,0,4"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind FolderPathVisibility}"
+                    x:Name="FolderText">
+                    <Run FontWeight="Bold">Folder:</Run>
+                    <Run Text="{x:Bind FolderPath}" />
+                </TextBlock>
+
                 <!--  tags text block  -->
                 <TextBlock
                     FontSize="14"

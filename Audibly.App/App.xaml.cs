@@ -174,7 +174,8 @@ public partial class App : Application
         {
             // Save window size and position before closing
             Window.SaveWindowSizeAndPosition();
-            
+            WindowHelper.SaveMiniPlayerPosition();
+
             if (PlayerViewModel.NowPlaying != null) await PlayerViewModel.NowPlaying.SaveAsync();
             PlayerViewModel.Dispose();
             WindowHelper.CloseAll();

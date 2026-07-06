@@ -217,11 +217,15 @@
                                 <ToggleMenuFlyoutItem
                                     x:Name="LengthMediumItem"
                                     Click="LengthMedium_OnClick"
-                                    Text="Medium (6h – 15h)" />
+                                    Text="Medium (6h – 17h)" />
                                 <ToggleMenuFlyoutItem
                                     x:Name="LengthLongItem"
                                     Click="LengthLong_OnClick"
-                                    Text="Long (&gt; 15h)" />
+                                    Text="Long (&gt; 17h)" />
+                                <ToggleMenuFlyoutItem
+                                    x:Name="LengthCustomItem"
+                                    Click="LengthCustom_OnClick"
+                                    Text="Custom…" />
                             </MenuFlyout>
                         </AppBarButton.Flyout>
                     </AppBarButton>

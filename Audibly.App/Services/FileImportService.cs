@@ -313,7 +313,7 @@ public class FileImportService : IImportFiles
 
             if (imageBytes == null)
             {
-                imageBytes = TryGetFolderCoverBytes(Path.GetDirectoryName(firstPath));
+                imageBytes = TryGetFolderCoverBytes(Path.GetDirectoryName(firstPath)).Bytes;
             }
 
             // generate hash from title, author, and composer
@@ -396,7 +396,7 @@ public class FileImportService : IImportFiles
             if (imageBytes == null)
             {
                 var directory = Path.GetDirectoryName(path);
-                imageBytes = TryGetFolderCoverBytes(directory);
+                imageBytes = TryGetFolderCoverBytes(directory).Bytes;
             }
 
             // generate hash from title, author, and composer
@@ -446,13 +446,13 @@ public class FileImportService : IImportFiles
     ///     2. Otherwise, the largest image file by size.
     ///     Returns null if no image files are found or directory is invalid.
     /// </summary>
-    private static byte[]? TryGetFolderCoverBytes(string? directory)
+    internal static (byte[]? Bytes, string? FileName) TryGetFolderCoverBytes(string? directory)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
             {
-                return null;
+                return (null, null);
             }
 
             var dirInfo = new DirectoryInfo(directory);
@@ -470,10 +470,10 @@ public class FileImportService : IImportFiles
 
             if (imageFiles.Count == 0)
             {
-                return null;
+                return (null, null);
             }
 
-            // 1. Prefer &quot;cover.*&quot; or &quot;folder.*&quot; (base name only, case-insensitive)
+            // 1. Prefer "cover.*" or "folder.*" (base name only, case-insensitive)
             var preferred = imageFiles.FirstOrDefault(f =>
             {
                 var name = Path.GetFileNameWithoutExtension(f.Name);
@@ -483,12 +483,12 @@ public class FileImportService : IImportFiles
 
             var selected = preferred ?? imageFiles.OrderByDescending(f => f.Length).First();
 
-            return File.ReadAllBytes(selected.FullName);
+            return (File.ReadAllBytes(selected.FullName), selected.Name);
         }
         catch (Exception e)
         {
             App.ViewModel.LoggingService.LogError(e, true);
-            return null;
+            return (null, null);
         }
     }
 }

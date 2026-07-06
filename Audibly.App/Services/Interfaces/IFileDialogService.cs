@@ -14,4 +14,7 @@ public interface IFileDialogService
 
     public StorageFile SaveFileDialog(string defaultFileName, List<string> fileTypes,
         PickerLocationId locationId = PickerLocationId.Desktop);
+
+    public string? OpenFileDialogInFolder(List<string> fileTypes, string? initialDirectory,
+        string filterName = "Supported files");
 }
