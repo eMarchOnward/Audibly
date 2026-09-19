@@ -84,17 +84,6 @@ public class PlayerViewModel : BindableBase, IDisposable
     private DateTime _lastPositionPersistTime = DateTime.MinValue;
     private readonly TimeSpan _positionPersistInterval = TimeSpan.FromSeconds(10);
 
-    // Retry state for MediaFailed (e.g. sleeping hard drive)
-    private int _mediaFailedRetryCount;
-    private const int MaxMediaFailedRetries = 2;
-    private static readonly int[] RetryDelaysSeconds = { 4, 6 };
-
-    /// <summary>
-    ///     Fired on the final MediaFailed after all retries are exhausted.
-    ///     Subscribe in any UI that wants a local playback-failure notification.
-    /// </summary>
-    public event EventHandler? PlaybackFailed;
-
     public PlayerViewModel()
     {
         // Move dispatcher queue initialization here
@@ -474,12 +463,10 @@ public class PlayerViewModel : BindableBase, IDisposable
         _pendingAutoPlay = value;
     }
 
-    public async Task<bool> OpenAudiobook(AudiobookViewModel audiobook)
+    public async Task OpenAudiobook(AudiobookViewModel audiobook)
     {
         if (NowPlaying != null && NowPlaying.Equals(audiobook))
-            return true;
-
-        _mediaFailedRetryCount = 0;
+            return;
 
         var previousAudiobook = NowPlaying;
 
@@ -517,7 +504,7 @@ public class PlayerViewModel : BindableBase, IDisposable
             await DialogService.ShowErrorDialogAsync("Error",
                 $"Unable to play audiobook: {audiobook.Title}. One or more of its source files were deleted or moved.");
 
-            return false;
+            return;
         }
 
         // Set flag to prevent PositionChanged from corrupting CurrentTimeMs during load
@@ -561,8 +548,6 @@ public class PlayerViewModel : BindableBase, IDisposable
         });
 
         MediaPlayer.Source = MediaSource.CreateFromUri(audiobook.CurrentSourceFile.FilePath.AsUri());
-
-        return true;
     }
 
     public void JumpToPosition(long positionMs)
@@ -647,7 +632,6 @@ public class PlayerViewModel : BindableBase, IDisposable
     private void AudioPlayer_MediaOpened(MediaPlayer sender, object args)
     {
         if (NowPlaying == null) return;
-        _mediaFailedRetryCount = 0;
         _dispatcherQueue.EnqueueAsync(async () =>
         {
             Debug.WriteLine($"[MediaOpened] File opened: Index={NowPlaying.CurrentSourceFileIndex}, Path={NowPlaying.CurrentSourceFile.FilePath}");
@@ -757,46 +741,15 @@ public class PlayerViewModel : BindableBase, IDisposable
 
     private void AudioPlayer_MediaFailed(MediaPlayer sender, MediaPlayerFailedEventArgs args)
     {
-        var bookToRetry = NowPlaying;
-
-        if (bookToRetry != null && _mediaFailedRetryCount < MaxMediaFailedRetries)
-        {
-            var delaySeconds = RetryDelaysSeconds[_mediaFailedRetryCount];
-            _mediaFailedRetryCount++;
-            _ = RetryMediaLoadAsync(bookToRetry, delaySeconds);
-            return;
-        }
-
-        _mediaFailedRetryCount = 0;
         _dispatcherQueue.TryEnqueue(() => NowPlaying = null);
 
+        // note: content dialog
         App.ViewModel.EnqueueNotification(new Notification
         {
-            Message = "Unable to play the audiobook after multiple attempts. The drive may be asleep or the file is unavailable.",
+            Message =
+                "Unable to open the audiobook: media failed. Please verify that the file is not corrupted and try again.",
             Severity = InfoBarSeverity.Error
         });
-
-        PlaybackFailed?.Invoke(this, EventArgs.Empty);
-    }
-
-    private async Task RetryMediaLoadAsync(AudiobookViewModel bookToRetry, int delaySeconds)
-    {
-        await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
-
-        if (NowPlaying != bookToRetry)
-        {
-            _mediaFailedRetryCount = 0;
-            return;
-        }
-
-        var filePath = bookToRetry.CurrentSourceFile?.FilePath;
-        if (string.IsNullOrEmpty(filePath))
-        {
-            _mediaFailedRetryCount = 0;
-            return;
-        }
-
-        MediaPlayer.Source = MediaSource.CreateFromUri(filePath.AsUri());
     }
 
     private void PlaybackSession_PlaybackStateChanged(MediaPlaybackSession sender, object args)

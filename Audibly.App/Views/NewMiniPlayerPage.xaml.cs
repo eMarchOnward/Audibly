@@ -84,8 +84,6 @@ public sealed partial class NewMiniPlayerPage : Page
             VolumeLevelSlider.Value = PlayerViewModel.VolumeLevel;
         if (PlaybackSpeedSlider != null)
             PlaybackSpeedSlider.Value = PlayerViewModel.PlaybackSpeed;
-
-        PlayerViewModel.PlaybackFailed += OnPlaybackFailed;
     }
 
     private void NewMiniPlayerPage_Unloaded(object sender, RoutedEventArgs e)
@@ -101,18 +99,6 @@ public sealed partial class NewMiniPlayerPage : Page
         // Clean up global keyboard hook
         _globalKeyboardHook?.Dispose();
         _globalKeyboardHook = null;
-
-        PlayerViewModel.PlaybackFailed -= OnPlaybackFailed;
-    }
-
-    private void OnPlaybackFailed(object? sender, EventArgs e)
-    {
-        _ = _dispatcherQueue.EnqueueAsync(async () =>
-        {
-            PlaybackFailedTip.IsOpen = true;
-            await Task.Delay(2000);
-            PlaybackFailedTip.IsOpen = false;
-        });
     }
 
     private void NewMiniPlayerPage_KeyDown(object sender, KeyRoutedEventArgs args)

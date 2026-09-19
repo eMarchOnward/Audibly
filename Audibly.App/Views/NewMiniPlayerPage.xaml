@@ -104,8 +104,7 @@
                 Grid.Column="3"
                 HorizontalAlignment="Center"
                 Margin="0,0,-8,0"
-                Spacing="-12"
-                x:Name="PlayControlsStack" />
+                Spacing="-12" />
 
             <Border
                 Background="{ThemeResource AppBarSeparatorForeground}"
@@ -397,16 +396,6 @@
                 <StaticResource ResourceKey="ControlFillColorTransparentBrush" x:Key="SliderThumbBorderBrush" />
             </Slider.Resources>
         </Slider>
-
-        <TeachingTip
-            IsLightDismissEnabled="False"
-            IsOpen="False"
-            PreferredPlacement="Top"
-            ShouldConstrainToRootBounds="False"
-            Subtitle="Check that the drive is awake, then press Play."
-            Target="{x:Bind PlayControlsStack}"
-            Title="Playback failed"
-            x:Name="PlaybackFailedTip" />
 
     </Grid>
 </Page>

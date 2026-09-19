@@ -278,7 +278,7 @@ public sealed partial class AudiobookTile : UserControl
             {
                 var currentAudiobook = PlayerViewModel.NowPlaying;
                 if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
-                    if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
+                    await PlayerViewModel.OpenAudiobook(audiobook);
                 PlayerViewModel.MediaPlayer.Play();
             });
         }
@@ -1103,7 +1103,7 @@ public sealed partial class AudiobookTile : UserControl
                 var currentAudiobook = PlayerViewModel.NowPlaying;
                 if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
                 {
-                    if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
+                    await PlayerViewModel.OpenAudiobook(audiobook);
                 }
 
                 // Start playing
@@ -1132,7 +1132,7 @@ public sealed partial class AudiobookTile : UserControl
             // Load the audiobook if it's not already loaded or if it's a different one
             if (currentAudiobook == null || currentAudiobook.Id != audiobook.Id)
             {
-                if (!await PlayerViewModel.OpenAudiobook(audiobook)) return;
+                await PlayerViewModel.OpenAudiobook(audiobook);
             }
 
             // Always start playing
