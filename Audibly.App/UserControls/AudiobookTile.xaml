@@ -112,7 +112,11 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border BorderThickness="0" Grid.Row="0" x:Name="CoverShadowBorder">
+            <Border
+                BorderThickness="0"
+                Grid.Row="0"
+                MaxHeight="{x:Bind ViewModel.AudiobookTileWidth, Mode=OneWay}"
+                x:Name="CoverShadowBorder">
                 <Border
                     BorderBrush="Transparent"
                     BorderThickness="0"

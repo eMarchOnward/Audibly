@@ -36,7 +36,7 @@
                 SourcePathsCount="{x:Bind SourcePaths.Count, Mode=OneWay}"
                 Title="{x:Bind Title, Mode=OneWay}">
                 <userControls:AudiobookTile.Source>
-                    <Image Source="{x:Bind ThumbnailPath, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="Uniform" />
+                    <Image Source="{x:Bind ThumbnailPath, Mode=OneWay, Converter={StaticResource StringToImageSourceConverter}}" Stretch="UniformToFill" />
                 </userControls:AudiobookTile.Source>
             </userControls:AudiobookTile>
         </DataTemplate>
