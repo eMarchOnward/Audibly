@@ -430,7 +430,9 @@ public sealed partial class PlayerControlGrid : UserControl
         }
     }
 
-    // Capture Up/Down and bracket/backslash in the Now Playing view and show the same slider as mini-player
+    // Capture bracket/backslash playback-speed shortcuts in the Now Playing view.
+    // Space/Up/Down are handled by the KeyboardAccelerators on RootGrid instead (see below) so they
+    // work regardless of focus; Left/Right skip already work that way via PlaySkipButtonsStack.
     private void PlayerControlGrid_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         var key = e.Key;
@@ -449,35 +451,53 @@ public sealed partial class PlayerControlGrid : UserControl
             ResetPlaybackSpeed(showFlyout: false);
             e.Handled = true;
         }
-        else if (key == VirtualKey.Up) // Increase speed with Up arrow
-        {
-            IncreasePlaybackSpeed(showFlyout: false);
-            e.Handled = true;
-        }
-        else if (key == VirtualKey.Down) // Decrease speed with Down arrow
-        {
-            DecreasePlaybackSpeed(showFlyout: false);
-            e.Handled = true;
-        }
-        else if (key == VirtualKey.Space)
-        {
-            // Suppress play/pause when typing in the Bookmarks flyout (e.g., the note TextBox)
-            if (IsInBookmarksFlyoutTextEditing())
-            {
-                // Let the TextBox receive the space character
-                e.Handled = false;
-                return;
-            }
+    }
 
-            // Toggle play/pause
-            var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
-            if (wasPlaying)
-                PlayerViewModel.MediaPlayer.Pause();
-            else
-                PlayerViewModel.MediaPlayer.Play();
-
-            e.Handled = true;
+    // Fires regardless of what has focus on the Now Playing page (see RootGrid.KeyboardAccelerators).
+    private void SpaceKeyAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Suppress play/pause when typing in the Bookmarks flyout (e.g., the note TextBox)
+        if (IsInBookmarksFlyoutTextEditing())
+        {
+            // Let the TextBox receive the space character
+            args.Handled = false;
+            return;
         }
+
+        // Toggle play/pause
+        var wasPlaying = PlayerViewModel.MediaPlayer.PlaybackSession.PlaybackState == MediaPlaybackState.Playing;
+        if (wasPlaying)
+            PlayerViewModel.MediaPlayer.Pause();
+        else
+            PlayerViewModel.MediaPlayer.Play();
+
+        args.Handled = true;
+    }
+
+    private void UpArrowKeyAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Let the note TextBox in the Bookmarks flyout receive the key instead of changing speed
+        if (IsInBookmarksFlyoutTextEditing())
+        {
+            args.Handled = false;
+            return;
+        }
+
+        IncreasePlaybackSpeed(showFlyout: false);
+        args.Handled = true;
+    }
+
+    private void DownArrowKeyAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        // Let the note TextBox in the Bookmarks flyout receive the key instead of changing speed
+        if (IsInBookmarksFlyoutTextEditing())
+        {
+            args.Handled = false;
+            return;
+        }
+
+        DecreasePlaybackSpeed(showFlyout: false);
+        args.Handled = true;
     }
 
     // Checks whether focus is currently inside the Bookmarks flyout and on a text-edit control

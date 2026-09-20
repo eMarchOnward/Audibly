@@ -68,7 +68,8 @@
             Click="PlayPauseButton_OnClick"
             Tag="play"
             ToolTipService.ToolTip="Play/Pause"
-            x:Name="PlayPauseButton">
+            x:Name="PlayPauseButton"
+            IsTabStop="False">
             <Viewbox MaxHeight="{x:Bind PlayButtonSize, Mode=OneWay}" MaxWidth="{x:Bind PlayButtonSize, Mode=OneWay}">
                 <SymbolIcon Symbol="{x:Bind PlayerViewModel.PlayPauseIcon, Mode=OneWay}" x:Name="PlayPauseIcon" />
             </Viewbox>

@@ -9,6 +9,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:media="using:CommunityToolkit.WinUI.Media"
     xmlns:userControls="using:Audibly.App.UserControls"
+    xmlns:vm="using:Audibly.App.ViewModels"
     xmlns:winUi="using:CommunityToolkit.WinUI"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--  ReSharper disable all Xaml.RedundantResource  -->
@@ -65,15 +66,27 @@
 
             <RelativePanel HorizontalAlignment="Stretch">
                 <!--  Back button  -->
+                <!--  IsTabStop="False": Tab-focusing this button meant the Space-bar play/pause
+                      accelerator (RootGrid.KeyboardAccelerators on PlayerControlGrid) would ALSO
+                      trigger this button's own native Space-invokes-focused-button behavior,
+                      navigating back to the library instead of just toggling playback. Escape
+                      already goes back when full-screen (see PlayerControlGrid's Maximize/Minimize
+                      button); the accelerator below covers the non-full-screen case so Back stays
+                      keyboard-reachable without relying on Tab.  -->
                 <Button
                     RequestedTheme="Dark"
                     Click="BackButton_OnClick"
                     IsEnabled="{x:Bind Frame.CanGoBack, Mode=OneWay}"
+                    IsTabStop="False"
                     RelativePanel.AlignLeftWithPanel="True"
                     RelativePanel.AlignTopWithPanel="True"
                     Style="{StaticResource NavigationBackButtonNormalStyle}"
                     ToolTipService.ToolTip="Back"
-                    x:Name="BackButton" />
+                    x:Name="BackButton">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator IsEnabled="{x:Bind vm:Converters.Not(PlayerViewModel.IsPlayerFullScreen), Mode=OneWay}" Key="Escape" />
+                    </Button.KeyboardAccelerators>
+                </Button>
 
                 <!--  cover image  -->
                 <Border

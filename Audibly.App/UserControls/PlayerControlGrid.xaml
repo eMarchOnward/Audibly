@@ -19,7 +19,24 @@
         <converters:ProgressSliderValueConverter x:Key="ProgressSliderValueConverter" />
         <converters:MillisecondsToTimeStringConverter x:Key="MillisecondsToTimeStringConverter" />
     </UserControl.Resources>
-    <Grid>
+    <Grid x:Name="RootGrid">
+        <Grid.KeyboardAccelerators>
+            <!--  Space/Up/Down work regardless of what has focus on the Now Playing page (see
+                  PlayerControlGrid_SpaceKey_Invoked / _UpArrowKey_Invoked / _DownArrowKey_Invoked).
+                  Left/Right skip already work this way via PlaySkipButtonsStack's accelerators.  -->
+            <KeyboardAccelerator
+                Invoked="SpaceKeyAccelerator_Invoked"
+                IsEnabled="{x:Bind vm:Converters.IsNotNull(PlayerViewModel.NowPlaying), Mode=OneWay}"
+                Key="Space" />
+            <KeyboardAccelerator
+                Invoked="UpArrowKeyAccelerator_Invoked"
+                IsEnabled="{x:Bind vm:Converters.IsNotNull(PlayerViewModel.NowPlaying), Mode=OneWay}"
+                Key="Up" />
+            <KeyboardAccelerator
+                Invoked="DownArrowKeyAccelerator_Invoked"
+                IsEnabled="{x:Bind vm:Converters.IsNotNull(PlayerViewModel.NowPlaying), Mode=OneWay}"
+                Key="Down" />
+        </Grid.KeyboardAccelerators>
         <Grid.Resources>
             <ResourceDictionary x:Key="ButtonResources">
                 <SolidColorBrush x:Key="ButtonBackground">Transparent</SolidColorBrush>

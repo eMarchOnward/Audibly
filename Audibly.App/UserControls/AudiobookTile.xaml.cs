@@ -366,84 +366,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
-        await RefreshCoverFromFolderAsync(audiobook);
-    }
-
-    private async Task ApplyCoverImageAsync(AudiobookViewModel audiobook, byte[] imageBytesArray, string? sourceFileName = null)
-    {
-        // Salt the hash with ticks so the new cover gets a unique path — the WinUI Image
-        // control caches bitmaps by URI and will not reload if the path is unchanged.
-        var hash = $"{audiobook.Model.Title}{audiobook.Model.Author}{audiobook.Model.Composer}{DateTime.UtcNow.Ticks}".GetSha256Hash();
-
-        if (!string.IsNullOrEmpty(audiobook.Model.CoverImagePath))
-            await ViewModel.AppDataService.DeleteCoverImageAsync(audiobook.Model.CoverImagePath);
-
-        var (coverImagePath, thumbnailPath) = await ViewModel.AppDataService.WriteCoverImageAsync(hash, imageBytesArray);
-
-        if (!string.IsNullOrEmpty(coverImagePath))
-        {
-            audiobook.Model.CoverImagePath = coverImagePath;
-            audiobook.Model.ThumbnailPath = thumbnailPath;
-            audiobook.IsModified = true;
-            await audiobook.SaveAsync();
-            audiobook.RefreshCoverImage();
-
-            var now = PlayerViewModel.NowPlaying;
-            if (now != null && now.Id == audiobook.Id)
-            {
-                now.Model.CoverImagePath = coverImagePath;
-                now.Model.ThumbnailPath = thumbnailPath;
-                now.RefreshCoverImage();
-            }
-
-            var message = sourceFileName != null
-                ? $"Found file {sourceFileName}."
-                : "Cover image updated successfully!";
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = message,
-                Severity = InfoBarSeverity.Success
-            });
-        }
-        else
-        {
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = "Failed to update cover image.",
-                Severity = InfoBarSeverity.Error
-            });
-        }
-    }
-
-    private async Task RefreshCoverFromFolderAsync(AudiobookViewModel audiobook)
-    {
-        var firstPath = audiobook.SourcePaths?.FirstOrDefault()?.FilePath;
-        var folder = firstPath != null ? Path.GetDirectoryName(firstPath) : null;
-
-        var (imageBytes, fileName) = FileImportService.TryGetFolderCoverBytes(folder);
-        if (imageBytes == null)
-        {
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = "No image files found in the audiobook folder.",
-                Severity = InfoBarSeverity.Warning
-            });
-            return;
-        }
-
-        try
-        {
-            await ApplyCoverImageAsync(audiobook, imageBytes, fileName);
-        }
-        catch (Exception ex)
-        {
-            ViewModel.LoggingService.LogError(ex, true);
-            ViewModel.EnqueueNotification(new Notification
-            {
-                Message = "An error occurred while refreshing the cover image.",
-                Severity = InfoBarSeverity.Error
-            });
-        }
+        await DialogService.RefreshCoverFromFolderAsync(audiobook);
     }
 
     private void ButtonTile_OnRightTapped(object sender, RightTappedRoutedEventArgs? e)
@@ -478,7 +401,7 @@ public sealed partial class AudiobookTile : UserControl
 
         var editRequested = await DialogService.ShowMoreInfoDialogAsync(audiobook);
         if (editRequested)
-            await ShowEditDialogForAsync(audiobook);
+            await DialogService.ShowEditAudiobookDialogAsync(audiobook);
     }
 
     private async void MarkAsCompleted_OnClick(object sender, RoutedEventArgs e)
@@ -514,65 +437,6 @@ public sealed partial class AudiobookTile : UserControl
         if (sender is Flyout flyout && flyout.Content is FrameworkElement root)
             return root.FindName(name) as T;
         return null;
-    }
-
-    private static string SanitizeForSqlite(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-        // Trim, remove non-printable control characters except CR/LF/TAB, and escape single quotes
-        var trimmed = value.Trim();
-        var sanitizedChars = trimmed.Where(c => c == '\n' || c == '\r' || c == '\t' || !char.IsControl(c));
-        var sanitized = new string(sanitizedChars.ToArray());
-        // Normalize newlines to \n
-        sanitized = sanitized.Replace("\r\n", "\n").Replace("\r", "\n");
-        // Escape single quotes for SQLite text safety (although EF parameterizes, this is defensive)
-        sanitized = sanitized.Replace("'", "''");
-        return sanitized;
-    }
-
-    private static string NormalizeTagName(string tagName)
-    {
-        if (string.IsNullOrWhiteSpace(tagName)) return string.Empty;
-        
-        // Trim leading/trailing spaces
-        var normalized = tagName.Trim();
-        
-        // Remove any non-alphanumeric characters except spaces and hyphens
-        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) || 
-            c == ' ' || c == '-' || c == '|' || c == '/' || c == '_').ToArray());
-        
-        // Convert to lowercase for case-insensitive comparison
-        return normalized.ToLowerInvariant();
-    }
-
-    private static List<Tag> ParseTagsFromText(string tagsText)
-    {
-        if (string.IsNullOrWhiteSpace(tagsText))
-            return new List<Tag>();
-
-        var tagNames = tagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var tags = new List<Tag>();
-
-        foreach (var tagName in tagNames)
-        {
-            var displayName = tagName.Trim(); // Keep spaces in display name
-            var normalizedName = NormalizeTagName(tagName);
-            
-            if (string.IsNullOrEmpty(normalizedName))
-                continue;
-
-            // Check if we already have this tag (avoid duplicates)
-            if (tags.Any(t => t.NormalizedName == normalizedName))
-                continue;
-
-            tags.Add(new Tag
-            {
-                Name = displayName,
-                NormalizedName = normalizedName
-            });
-        }
-
-        return tags;
     }
 
     private static string TagsToCommaSeparatedString(List<Tag> tags)
@@ -628,7 +492,7 @@ public sealed partial class AudiobookTile : UserControl
             if (args.Item is Tag) return;
             var text = args.TokenText?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
-            var norm = NormalizeTagName(text);
+            var norm = AudiobookEditHelpers.NormalizeTagName(text);
             if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
             if (pendingAddTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
             args.Item = allTags.FirstOrDefault(t => t.NormalizedName == norm)
@@ -647,7 +511,7 @@ public sealed partial class AudiobookTile : UserControl
             if (args.Item is Tag) return;
             var text = args.TokenText?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
-            var norm = NormalizeTagName(text);
+            var norm = AudiobookEditHelpers.NormalizeTagName(text);
             if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
             if (pendingRemoveTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
             var existing = allTags.FirstOrDefault(t => t.NormalizedName == norm);
@@ -758,11 +622,11 @@ public sealed partial class AudiobookTile : UserControl
         if (result != ContentDialogResult.Primary) return;
 
         // Commit any free text still in the boxes
-        foreach (var t in ParseTagsFromText(addTagsBox.Text ?? string.Empty))
+        foreach (var t in AudiobookEditHelpers.ParseTagsFromText(addTagsBox.Text ?? string.Empty))
             if (!pendingAddTags.Any(x => x.NormalizedName == t.NormalizedName))
                 pendingAddTags.Add(allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName) ?? t);
 
-        foreach (var t in ParseTagsFromText(removeTagsBox.Text ?? string.Empty))
+        foreach (var t in AudiobookEditHelpers.ParseTagsFromText(removeTagsBox.Text ?? string.Empty))
         {
             var existing = allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName);
             if (existing != null && !pendingRemoveTags.Any(x => x.NormalizedName == t.NormalizedName))
@@ -810,282 +674,7 @@ public sealed partial class AudiobookTile : UserControl
     {
         var audiobook = ViewModel.Audiobooks.FirstOrDefault(a => a.Id == Id);
         if (audiobook == null) return;
-        await ShowEditDialogForAsync(audiobook);
-    }
-
-    private async Task ShowEditDialogForAsync(AudiobookViewModel audiobook)
-    {
-        ViewModel.SelectedAudiobook = audiobook;
-
-        var allTags = await App.Repository.Audiobooks.GetAllTagsAsync();
-
-        // Working copy – fresh Tag instances so EF tracking on the original list is unaffected
-        var pendingTags = new ObservableCollection<Tag>(audiobook.Model.Tags.Select(t => new Tag
-        {
-            Name = t.Name,
-            NormalizedName = t.NormalizedName
-        }));
-
-        var coverImg = new Image { Width = 96, Height = 96, Stretch = Stretch.UniformToFill };
-        coverImg.SetBinding(Image.SourceProperty, new Microsoft.UI.Xaml.Data.Binding
-        {
-            Path = new PropertyPath("SelectedAudiobook.ThumbnailPath")
-        });
-
-        var hoverOverlay = new Grid
-        {
-            Width = 96,
-            Height = 96,
-            Background = new SolidColorBrush(ColorHelper.ToColor("#8C000000")),
-            IsHitTestVisible = false,
-            Opacity = 0
-        };
-        hoverOverlay.Children.Add(new FontIcon
-        {
-            Glyph = "",
-            FontSize = 22,
-            Foreground = new SolidColorBrush(Colors.White),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var coverGrid = new Grid { Width = 96, Height = 96 };
-        coverGrid.Children.Add(coverImg);
-        coverGrid.Children.Add(hoverOverlay);
-
-        var coverButton = new Button
-        {
-            Content = coverGrid,
-            Padding = new Thickness(0),
-            BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(4),
-            Background = new SolidColorBrush(Colors.Transparent)
-        };
-        ToolTipService.SetToolTip(coverButton, "Click to change cover");
-        coverButton.PointerEntered += (_, _) => hoverOverlay.Opacity = 1;
-        coverButton.PointerExited += (_, _) => hoverOverlay.Opacity = 0;
-        coverButton.Click += async (_, _) =>
-        {
-            var supportedImageTypes = new List<string> { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp" };
-            // Start the picker in the audiobook's source folder — the most likely home for new cover art
-            var sourceFolder = Path.GetDirectoryName(audiobook.SourcePaths?.FirstOrDefault()?.FilePath);
-            var selectedPath = ViewModel.FileDialogService.OpenFileDialogInFolder(supportedImageTypes, sourceFolder, "Images");
-            if (selectedPath == null) return;
-            try
-            {
-                var bytes = await File.ReadAllBytesAsync(selectedPath);
-                await ApplyCoverImageAsync(audiobook, bytes);
-            }
-            catch (Exception ex)
-            {
-                ViewModel.LoggingService.LogError(ex, true);
-                ViewModel.EnqueueNotification(new Notification { Message = "Failed to update cover image.", Severity = InfoBarSeverity.Error });
-            }
-        };
-
-        var refreshLink = new HyperlinkButton
-        {
-            Content = "Refresh from folder",
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Padding = new Thickness(0, 2, 0, 0),
-            FontSize = 12
-        };
-        refreshLink.Click += async (_, _) => await RefreshCoverFromFolderAsync(audiobook);
-
-        var coverPanel = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
-        coverPanel.Children.Add(coverButton);
-        coverPanel.Children.Add(refreshLink);
-
-        var titleBox = new TextBox { Header = "Title" };
-        titleBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
-        {
-            Path = new PropertyPath("SelectedAudiobook.Model.Title"),
-            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
-            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
-        });
-
-        var authorBox = new TextBox { Header = "Author" };
-        authorBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
-        {
-            Path = new PropertyPath("SelectedAudiobook.Model.Author"),
-            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
-            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
-        });
-
-        var narratorBox = new TextBox { Header = "Narrator" };
-        narratorBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
-        {
-            Path = new PropertyPath("SelectedAudiobook.Model.Composer"),
-            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
-            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
-        });
-
-        // Tags – TokenizingTextBox bound to pendingTags so chips appear immediately
-        var tagsBox = new TokenizingTextBox
-        {
-            PlaceholderText = "Type a tag and press Enter, or use commas",
-            TokenDelimiter = ",",
-            ItemsSource = pendingTags,
-            TextMemberPath = "Name"
-        };
-
-        tagsBox.TokenItemAdding += (_, args) =>
-        {
-            if (args.Item is Tag) return; // programmatic add via ObservableCollection
-
-            var text = args.TokenText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
-
-            var normalizedName = NormalizeTagName(text);
-            if (string.IsNullOrEmpty(normalizedName)) { args.Cancel = true; return; }
-
-            if (pendingTags.Any(t => t.NormalizedName == normalizedName)) { args.Cancel = true; return; }
-
-            // Reuse the existing DB tag if it matches, otherwise create a new one
-            var existing = allTags.FirstOrDefault(t => t.NormalizedName == normalizedName);
-            args.Item = existing ?? new Tag { Name = text, NormalizedName = normalizedName };
-        };
-
-        // Available-tags picker: one button per existing tag not already on this audiobook
-        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
-        var tagsSection = new StackPanel { Spacing = 4 };
-
-        if (allTags.Any())
-        {
-            tagsSection.Children.Add(new TextBlock
-            {
-                Text = "Available Tags",
-                Margin = new Thickness(0, 0, 0, 2),
-                Style = sectionLabelStyle
-            });
-
-            // Map NormalizedName → Button so CollectionChanged can toggle visibility
-            var tagButtons = new Dictionary<string, Button>();
-            var tagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
-            foreach (var tag in allTags.OrderBy(t => t.Name))
-            {
-                var capturedTag = tag;
-                var alreadyAdded = pendingTags.Any(t => t.NormalizedName == tag.NormalizedName);
-                var addBtn = new Button
-                {
-                    Content = "+ " + tag.Name,
-                    Padding = new Thickness(8, 4, 8, 4),
-                    FontSize = 12,
-                    Visibility = alreadyAdded ? Visibility.Collapsed : Visibility.Visible
-                };
-                addBtn.Click += (btnSender, btnArgs) =>
-                {
-                    if (!pendingTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
-                        pendingTags.Add(capturedTag);
-                };
-                tagButtons[tag.NormalizedName] = addBtn;
-                tagStrip.Children.Add(addBtn);
-            }
-
-            // Keep Available Tags and token box in sync as the user adds/removes tags
-            pendingTags.CollectionChanged += (_, args) =>
-            {
-                if (args.NewItems != null)
-                    foreach (Tag added in args.NewItems)
-                        if (tagButtons.TryGetValue(added.NormalizedName, out var btn))
-                            btn.Visibility = Visibility.Collapsed;
-
-                if (args.OldItems != null)
-                    foreach (Tag removed in args.OldItems)
-                        if (tagButtons.TryGetValue(removed.NormalizedName, out var btn))
-                            btn.Visibility = Visibility.Visible;
-            };
-
-            tagsSection.Children.Add(tagStrip);
-
-            tagsSection.Children.Add(new TextBlock
-            {
-                Text = "Tags",
-                Margin = new Thickness(0, 4, 0, 2),
-                Style = sectionLabelStyle
-            });
-        }
-
-        tagsSection.Children.Add(tagsBox);
-
-        var descBox = new TextBox { Header = "Description", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 120 };
-        descBox.SetBinding(TextBox.TextProperty, new Microsoft.UI.Xaml.Data.Binding
-        {
-            Path = new PropertyPath("SelectedAudiobook.Model.Description"),
-            Mode = Microsoft.UI.Xaml.Data.BindingMode.TwoWay,
-            UpdateSourceTrigger = Microsoft.UI.Xaml.Data.UpdateSourceTrigger.PropertyChanged
-        });
-
-        var fieldsPanel = new StackPanel { Spacing = 8 };
-        fieldsPanel.Children.Add(titleBox);
-        fieldsPanel.Children.Add(authorBox);
-        fieldsPanel.Children.Add(narratorBox);
-
-        var grid = new Grid { ColumnSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(coverPanel, 0);
-        grid.Children.Add(coverPanel);
-        Grid.SetColumn(fieldsPanel, 1);
-        grid.Children.Add(fieldsPanel);
-
-        var panel = new StackPanel
-        {
-            Spacing = 12,
-            Padding = new Thickness(12),
-            MinWidth = 400
-        };
-        panel.Children.Add(grid);
-        panel.Children.Add(tagsSection);
-        panel.Children.Add(descBox);
-        panel.DataContext = ViewModel;
-
-        var dialog = new ContentDialog
-        {
-            Title = "Edit Info",
-            Content = panel,
-            PrimaryButtonText = "OK",
-            SecondaryButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-            MinWidth = 420
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            audiobook.Model.Title = SanitizeForSqlite(audiobook.Model.Title);
-            audiobook.Model.Author = SanitizeForSqlite(audiobook.Model.Author);
-            audiobook.Model.Composer = SanitizeForSqlite(audiobook.Model.Composer);
-            audiobook.Model.Description = SanitizeForSqlite(audiobook.Model.Description);
-
-            // Parse any uncommitted free text still in the tags box (comma-separated)
-            var remainingText = tagsBox.Text?.Trim() ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(remainingText))
-            {
-                foreach (var t in ParseTagsFromText(remainingText))
-                {
-                    if (!pendingTags.Any(x => x.NormalizedName == t.NormalizedName))
-                        pendingTags.Add(t);
-                }
-            }
-
-            audiobook.Model.Tags = pendingTags.ToList();
-            audiobook.IsModified = true;
-
-            await audiobook.SaveAsync();
-            await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
-            audiobook.RefreshCoverImage();
-
-            await ViewModel.RefreshTagsForAudiobooksAsync(new[] { audiobook });
-
-            var now = PlayerViewModel.NowPlaying;
-            if (now != null && now.Id == audiobook.Id)
-            {
-                now.Model.Title = audiobook.Model.Title;
-                now.Model.Author = audiobook.Model.Author;
-            }
-        }
+        await DialogService.ShowEditAudiobookDialogAsync(audiobook);
     }
 
     private async void ButtonTile_OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)

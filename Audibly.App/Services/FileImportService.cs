@@ -227,6 +227,34 @@ public class FileImportService : IImportFiles
         ImportCompleted?.Invoke();
     }
 
+    public async Task<Audiobook?> ScrapeAudiobookAsync(string path)
+    {
+        return await CreateAudiobook(path);
+    }
+
+    public async Task<Audiobook?> ScrapeAudiobookFromMultipleFilesAsync(string[] paths)
+    {
+        var audiobook = await CreateAudiobookFromMultipleFiles(paths);
+        if (audiobook == null) return null;
+
+        // Mirror the duplicate check ImportFromMultipleFilesAsync does after scraping, so the
+        // "review before import" flow gives the same "already in library" feedback.
+        var existingAudioBook = await App.Repository.Audiobooks.GetByTitleAuthorComposerAsync(audiobook.Title,
+            audiobook.Author, audiobook.Composer);
+        if (existingAudioBook != null)
+        {
+            App.ViewModel.LoggingService.LogError(new Exception("Audiobook already exists in the database"));
+            App.ViewModel.EnqueueNotification(new Notification
+            {
+                Message = $"Audiobook is already in the library: {existingAudioBook.Title}",
+                Severity = InfoBarSeverity.Warning
+            });
+            return null;
+        }
+
+        return audiobook;
+    }
+
     #endregion
 
     private static async Task<Audiobook?> CreateAudiobookFromMultipleFiles(string[] paths)

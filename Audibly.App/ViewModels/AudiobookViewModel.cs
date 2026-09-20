@@ -87,15 +87,22 @@ public class AudiobookViewModel : BindableBase
     /// <summary>
     ///     Saves audiobook data that has been edited.
     /// </summary>
-    public async Task SaveAsync()
+    /// <returns>
+    ///     True if there was nothing to save or the save succeeded; false if the underlying
+    ///     upsert was rejected (e.g. the title/author now collides with a different audiobook).
+    /// </returns>
+    public async Task<bool> SaveAsync()
     {
         await _saveLock.WaitAsync();
         try
         {
+            var succeeded = true;
+
             if (IsModified)
-                await App.Repository.Audiobooks.UpsertAsync(Model);
+                succeeded = await App.Repository.Audiobooks.UpsertAsync(Model) != null;
 
             IsModified = false;
+            return succeeded;
         }
         finally
         {

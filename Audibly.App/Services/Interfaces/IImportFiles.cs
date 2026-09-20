@@ -5,6 +5,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Audibly.Models;
 using Windows.Storage;
 
 namespace Audibly.App.Services.Interfaces;
@@ -26,4 +27,17 @@ public interface IImportFiles
 
     Task ImportFromJsonAsync(StorageFile file, CancellationToken cancellationToken,
         Func<int, int, string, bool, Task> progressCallback);
+
+    /// <summary>
+    ///     Scrapes metadata/chapters/cover art for a single audio file into an in-memory Audiobook,
+    ///     without writing it to the database. Used by the "review before import" flow.
+    /// </summary>
+    Task<Audiobook?> ScrapeAudiobookAsync(string path);
+
+    /// <summary>
+    ///     Scrapes metadata/chapters/cover art for a single audiobook made up of multiple source files
+    ///     into an in-memory Audiobook, without writing it to the database. Used by the
+    ///     "review before import" flow.
+    /// </summary>
+    Task<Audiobook?> ScrapeAudiobookFromMultipleFilesAsync(string[] paths);
 }
