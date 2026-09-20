@@ -44,7 +44,6 @@ public class MainViewModel : BindableBase
 
     public delegate void ResetFiltersHandler();
     public delegate void ClearSearchTextHandler();
-    public delegate void ClearTagSelectionHandler();
 
     #endregion
 
@@ -137,19 +136,9 @@ public class MainViewModel : BindableBase
     public ObservableCollection<Tag> SelectedTags { get; } = [];
 
     /// <summary>
-    ///     Event raised when selected tags change.
-    /// </summary>
-    public event EventHandler? SelectedTagsChanged;
-
-    /// <summary>
     ///     Event raised when the search text should be cleared.
     /// </summary>
     public event ClearSearchTextHandler? ClearSearchText;
-
-    /// <summary>
-    ///     Event raised when tag selections should be cleared in the UI.
-    /// </summary>
-    public event ClearTagSelectionHandler? ClearTagSelection;
 
     /// <summary>
     ///     Event raised after AvailableTags is repopulated from the database.
@@ -184,10 +173,87 @@ public class MainViewModel : BindableBase
     /// </summary>
     public bool HasMultipleSelected => Audiobooks.Count(a => a.IsSelected) >= 2;
 
+    /// <summary>
+    ///     Number of currently selected audiobooks. Drives the details panel in the nav pane.
+    /// </summary>
+    public int SelectedCount => Audiobooks.Count(a => a.IsSelected);
+
+    /// <summary>
+    ///     True when at least one audiobook is selected.
+    /// </summary>
+    public bool HasAnySelected => SelectedCount > 0;
+
+    /// <summary>
+    ///     True when exactly one audiobook is selected.
+    /// </summary>
+    public bool HasSingleSelected => SelectedCount == 1;
+
+    /// <summary>
+    ///     The selected audiobook when exactly one is selected; otherwise null.
+    /// </summary>
+    public AudiobookViewModel? SingleSelectedAudiobook =>
+        SelectedCount == 1 ? Audiobooks.FirstOrDefault(a => a.IsSelected) : null;
+
+    /// <summary>
+    ///     Combined duration of all selected audiobooks, formatted as e.g. "38h 15m".
+    /// </summary>
+    public string SelectedTotalLengthText
+    {
+        get
+        {
+            var totalSeconds = Audiobooks.Where(a => a.IsSelected).Sum(a => a.Duration);
+            var ts = TimeSpan.FromSeconds(totalSeconds);
+            return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        }
+    }
+
+    /// <summary>
+    ///     Breakdown of selected audiobooks by file extension, e.g. "2 .m4b, 1 .mp3".
+    /// </summary>
+    public string SelectedFormatsBreakdownText
+    {
+        get
+        {
+            var groups = Audiobooks.Where(a => a.IsSelected)
+                .Select(a => Path.GetExtension(a.SourcePaths.FirstOrDefault()?.FilePath ?? string.Empty)
+                    .ToLowerInvariant())
+                .Where(ext => !string.IsNullOrEmpty(ext))
+                .GroupBy(ext => ext)
+                .OrderByDescending(g => g.Count());
+            return string.Join(", ", groups.Select(g => $"{g.Count()} {g.Key}"));
+        }
+    }
+
+    /// <summary>
+    ///     Tags present on every currently selected audiobook.
+    /// </summary>
+    public List<Tag> SelectedSharedTags
+    {
+        get
+        {
+            var selected = Audiobooks.Where(a => a.IsSelected).ToList();
+            if (selected.Count == 0) return [];
+
+            var sharedNames = selected[0].Model.Tags.Select(t => t.NormalizedName).ToHashSet();
+            foreach (var book in selected.Skip(1))
+                sharedNames.IntersectWith(book.Model.Tags.Select(t => t.NormalizedName));
+
+            return selected[0].Model.Tags.Where(t => sharedNames.Contains(t.NormalizedName)).ToList();
+        }
+    }
+
     private void OnAudiobookIsSelectedChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(AudiobookViewModel.IsSelected))
-            OnPropertyChanged(nameof(HasMultipleSelected));
+        if (e.PropertyName != nameof(AudiobookViewModel.IsSelected)) return;
+
+        OnPropertyChanged(nameof(HasMultipleSelected));
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(HasAnySelected));
+        OnPropertyChanged(nameof(HasSingleSelected));
+        OnPropertyChanged(nameof(SingleSelectedAudiobook));
+        OnPropertyChanged(nameof(SelectedTotalLengthText));
+        OnPropertyChanged(nameof(SelectedFormatsBreakdownText));
+        OnPropertyChanged(nameof(SelectedSharedTags));
     }
 
     /// <summary>
@@ -772,22 +838,6 @@ public class MainViewModel : BindableBase
     {
         await _dispatcherQueue.EnqueueAsync(async () =>
             await GetAudiobookListAsync());
-    }
-
-    /// <summary>
-    ///     Raises the SelectedTagsChanged event.
-    /// </summary>
-    public void NotifySelectedTagsChanged()
-    {
-        SelectedTagsChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>
-    ///     Raises the ClearTagSelection event to clear tag UI selections.
-    /// </summary>
-    public void NotifyClearTagSelection()
-    {
-        ClearTagSelection?.Invoke();
     }
 
     public async Task RenameTagAsync(Tag tag, string newName)

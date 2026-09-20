@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Audibly.App.Extensions;
@@ -356,6 +358,29 @@ public class AudiobookViewModel : BindableBase
     ///     Gets or sets the release date of the audiobook.
     /// </summary>
     public string ReleaseDate => Model.ReleaseDate?.ToShortDateString() ?? string.Empty;
+
+    /// <summary>
+    ///     File extension and file count, e.g. ".m4b (1 file)", for the details panel.
+    /// </summary>
+    public string FormatDisplayText
+    {
+        get
+        {
+            var ext = Path.GetExtension(SourcePaths.FirstOrDefault()?.FilePath ?? string.Empty);
+            var count = SourcePaths.Count;
+            return $"{ext} ({count} file{(count == 1 ? "" : "s")})";
+        }
+    }
+
+    /// <summary>
+    ///     Date imported, formatted for the details panel.
+    /// </summary>
+    public string DateAddedDisplayText => Model.DateImported?.ToShortDateString() ?? "Unknown";
+
+    /// <summary>
+    ///     Date last played, formatted for the details panel.
+    /// </summary>
+    public string LastPlayedDisplayText => Model.DateLastPlayed?.ToShortDateString() ?? "Never";
 
     /// <summary>
     ///     Gets or sets the current chapter of the audiobook.

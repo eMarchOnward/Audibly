@@ -37,13 +37,6 @@ public sealed partial class LibraryCardPage : Page
 {
     #region Filter enums
 
-    public enum AudioBookFilter
-    {
-        InProgress,
-        NotStarted,
-        Completed
-    }
-
     private enum LengthFilter { Any, Short, Medium, Long, Custom }
 
     #endregion
@@ -58,7 +51,6 @@ public sealed partial class LibraryCardPage : Page
 
     public const string ImportFromJsonFileText = "Import audiobooks from an Audibly export file (.audibly)";
 
-    private readonly HashSet<AudioBookFilter> _activeFilters = new();
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
     private bool _suppressNextTextClear;
 
@@ -74,12 +66,18 @@ public sealed partial class LibraryCardPage : Page
     private static readonly Guid LengthLongId   = new("00000000-0000-0000-0000-000000000003");
     private static readonly Guid LengthCustomId = new("00000000-0000-0000-0000-000000000004");
 
-    // Status filter token sentinels
-    private bool _updatingStatusToken;
-    private bool _suppressCheckboxHandlers;
-    private static readonly Guid StatusInProgressId = new("00000000-0000-0000-0000-000000000011");
-    private static readonly Guid StatusNotStartedId = new("00000000-0000-0000-0000-000000000012");
-    private static readonly Guid StatusCompletedId  = new("00000000-0000-0000-0000-000000000013");
+    // Tags filter dropdown state
+    // _allTagFilterItems is the persistent master row list (one per available tag, checked state
+    // always kept in sync with SelectedTags); _tagsFilterDisplayItems is the ListView's bound
+    // subset after the search box narrows it — same TagFilterItem instances, so checking a box
+    // updates both without any extra sync code.
+    private readonly List<TagFilterItem> _allTagFilterItems = new();
+    private readonly ObservableCollection<TagFilterItem> _tagsFilterDisplayItems = new();
+
+    /// <summary>
+    ///     The ListView's bound item source in the Tags flyout (x:Bind requires a property, not a field).
+    /// </summary>
+    public ObservableCollection<TagFilterItem> TagsFilterDisplayItems => _tagsFilterDisplayItems;
 
     public LibraryCardPage()
     {
@@ -88,8 +86,6 @@ public sealed partial class LibraryCardPage : Page
         // subscribe to page loaded event
         Loaded += LibraryCardPage_Loaded;
         Unloaded += LibraryCardPage_Unloaded;
-        ViewModel.ResetFilters += ViewModelOnResetFilters;
-        ViewModel.SelectedTagsChanged += ViewModelOnSelectedTagsChanged;
         ViewModel.ClearSearchText += ViewModelOnClearSearchText;
         ViewModel.AvailableTagsReloaded += ViewModelOnAvailableTagsReloaded;
         // keep sort UI in sync with ViewModel and persisted settings
@@ -97,8 +93,8 @@ public sealed partial class LibraryCardPage : Page
 
         // initialize sort toggles based on saved sort mode
         UpdateSortToggleUI();
+        UpdateTagsButtonState();
 
-        this.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnPageKeyDown), true);
         LibraryCardScrollView.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnScrollViewPointerPressed), true);
     }
 
@@ -111,11 +107,6 @@ public sealed partial class LibraryCardPage : Page
     ///     Gets the app-wide PlayerViewModel instance.
     /// </summary>
     public PlayerViewModel PlayerViewModel => App.PlayerViewModel;
-
-    private async void ViewModelOnResetFilters()
-    {
-        await ResetStatusFiltersAsync();
-    }
 
     private async void LibraryCardPage_Loaded(object sender, RoutedEventArgs e)
     {
@@ -170,19 +161,13 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     public async Task ResetAudiobookListAsync()
     {
-        _activeFilters.Clear();
-
-        _suppressCheckboxHandlers = true;
-        InProgressFilterCheckBox.IsChecked = false;
-        NotStartedFilterCheckBox.IsChecked = false;
-        CompletedFilterCheckBox.IsChecked = false;
-        _suppressCheckboxHandlers = false;
-        SetCheckedState();
-
         _activeLengthFilter = LengthFilter.Any;
         SetLengthButtonUI(LengthFilter.Any);
 
         ViewModel.ClearSelectedTags();
+        foreach (var item in _tagsFilterDisplayItems) item.IsChecked = false;
+        UpdateTagsButtonState();
+
         ViewModel.SearchText = string.Empty;
         if (AudiobookSearchBox != null) AudiobookSearchBox.Text = string.Empty;
 
@@ -190,29 +175,18 @@ public sealed partial class LibraryCardPage : Page
     }
 
     /// <summary>
-    ///     Single unified filter: applies progress, length, tag (OR), and search-text filters together
+    ///     Single unified filter: applies length, tag (OR), and search-text filters together
     ///     from the master AudiobooksForFilter list, then updates ViewModel.Audiobooks.
     /// </summary>
     private async Task ApplyFiltersAsync()
     {
         var searchText = ViewModel.SearchText;
-        // Exclude sentinel filter chips (length, status) from the real tag filter
-        var realTags = ViewModel.SelectedTags.Where(t => !IsFilterToken(t)).ToList();
+        // Exclude sentinel length chips from the real tag filter
+        var realTags = ViewModel.SelectedTags.Where(t => !IsLengthFilterTag(t)).ToList();
         var hasTagFilter = realTags.Count > 0;
-        var hasProgressFilter = _activeFilters.Count > 0;
         var hasSearch = !string.IsNullOrEmpty(searchText);
 
         IEnumerable<AudiobookViewModel> source = ViewModel.AudiobooksForFilter;
-
-        if (hasProgressFilter)
-        {
-            // InProgress and NotStarted share the same threshold (> 2 / <= 2) so they
-            // partition the non-completed set with no gap.
-            source = source.Where(a =>
-                (_activeFilters.Contains(AudioBookFilter.InProgress) && a.Progress > 2  && !a.IsCompleted) ||
-                (_activeFilters.Contains(AudioBookFilter.NotStarted) && a.Progress <= 2 && !a.IsCompleted) ||
-                (_activeFilters.Contains(AudioBookFilter.Completed)  && a.IsCompleted));
-        }
 
         if (hasTagFilter)
         {
@@ -274,94 +248,44 @@ public sealed partial class LibraryCardPage : Page
         });
     }
 
-    private void SetCheckedState()
+    /// <summary>
+    ///     Updates the Tags button's border highlight and red dot to reflect whether any
+    ///     real (non-length-sentinel) tags are currently selected.
+    /// </summary>
+    private void UpdateTagsButtonState()
     {
-        // Controls are null the first time this is called, so we just
-        // need to perform a null check on any one of the controls.
-        if (InProgressFilterCheckBox == null || FilterButton == null) return;
+        // Controls are null the first time this is called during page construction.
+        if (TagsButton == null) return;
 
-        // Border and dot reflect whether filtering is actually in effect —
-        // all three checked is equivalent to none checked (show everything).
-        var isFilterActive = _activeFilters.Count > 0;
+        var isFilterActive = ViewModel.SelectedTags.Any(t => !IsLengthFilterTag(t));
 
         if (isFilterActive)
         {
-            FilterButton.BorderBrush = new SolidColorBrush((Color)Application.Current.Resources["SystemAccentColor"]);
-            FilterButton.BorderThickness = new Thickness(2);
+            TagsButton.BorderBrush = new SolidColorBrush((Color)Application.Current.Resources["SystemAccentColor"]);
+            TagsButton.BorderThickness = new Thickness(2);
         }
         else
         {
-            FilterButton.BorderBrush = new SolidColorBrush(Colors.Transparent);
-            FilterButton.BorderThickness = new Thickness(0);
+            TagsButton.BorderBrush = new SolidColorBrush(Colors.Transparent);
+            TagsButton.BorderThickness = new Thickness(0);
         }
 
-        if (StatusFilterDot != null)
-            StatusFilterDot.Visibility = isFilterActive ? Visibility.Visible : Visibility.Collapsed;
+        if (TagsFilterDot != null)
+            TagsFilterDot.Visibility = isFilterActive ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>
-    ///     Derives the effective status filter set, search-bar chips, and button UI from the
-    ///     three checkbox states. Checking all three is equivalent to checking none: everything
-    ///     is shown and no chips or indicators are displayed.
-    /// </summary>
-    private async Task SyncStatusFiltersAsync()
+    // Fires regardless of what currently has focus (e.g. after toggling the nav pane, which moves
+    // focus outside this page's own visual tree) — a plain bubbling KeyDown handler wouldn't.
+    private void ClearSelectionKeyboardAccelerator_OnInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        var checkedFilters = new List<AudioBookFilter>();
-        if (NotStartedFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.NotStarted);
-        if (InProgressFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.InProgress);
-        if (CompletedFilterCheckBox.IsChecked == true) checkedFilters.Add(AudioBookFilter.Completed);
-
-        var noFilter = checkedFilters.Count == 0 || checkedFilters.Count == 3;
-
-        _activeFilters.Clear();
-        if (!noFilter)
-            foreach (var f in checkedFilters)
-                _activeFilters.Add(f);
-
-        _updatingStatusToken = true;
-        try
+        if (!ViewModel.Audiobooks.Any(a => a.IsSelected))
         {
-            foreach (var f in new[] { AudioBookFilter.NotStarted, AudioBookFilter.InProgress, AudioBookFilter.Completed })
-            {
-                if (_activeFilters.Contains(f)) AddStatusFilterToken(f);
-                else RemoveStatusFilterToken(f);
-            }
-        }
-        finally
-        {
-            _updatingStatusToken = false;
+            args.Handled = false;
+            return;
         }
 
-        SetCheckedState();
-        await ApplyFiltersAsync();
-    }
-
-    private async void StatusFilterCheckBox_OnToggled(object sender, RoutedEventArgs e)
-    {
-        if (_suppressCheckboxHandlers) return;
-        await SyncStatusFiltersAsync();
-    }
-
-    private async Task ResetStatusFiltersAsync()
-    {
-        if (InProgressFilterCheckBox == null) return;
-        _suppressCheckboxHandlers = true;
-        NotStartedFilterCheckBox.IsChecked = false;
-        InProgressFilterCheckBox.IsChecked = false;
-        CompletedFilterCheckBox.IsChecked = false;
-        _suppressCheckboxHandlers = false;
-        await SyncStatusFiltersAsync();
-    }
-
-    private async void ResetStatusFilters_OnClick(object sender, RoutedEventArgs e)
-    {
-        await ResetStatusFiltersAsync();
-    }
-
-    private void OnPageKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key == Windows.System.VirtualKey.Escape && ViewModel.Audiobooks.Any(a => a.IsSelected))
-            ViewModel.ClearSelection();
+        ViewModel.ClearSelection();
+        args.Handled = true;
     }
 
     private void OnScrollViewPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -436,246 +360,14 @@ public sealed partial class LibraryCardPage : Page
     private async void MultiSelectDeleteSelected_OnClick(object sender, RoutedEventArgs e)
     {
         var count = ViewModel.Audiobooks.Count(a => a.IsSelected);
-        if (count == 0) return;
-
-        var dialog = new ContentDialog
-        {
-            Title = "Delete selected",
-            Content = $"Permanently delete {count} audiobook{(count == 1 ? "" : "s")}? This cannot be undone.",
-            PrimaryButtonText = "Delete",
-            SecondaryButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Secondary,
-            XamlRoot = XamlRoot
-        };
-
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        if (await DialogService.ConfirmDeleteAudiobooksAsync(count))
             await ViewModel.DeleteSelectedAudiobooksAsync();
     }
 
     private async void MultiSelectManageTags_OnClick(object sender, RoutedEventArgs e)
     {
         var selectedAudiobooks = ViewModel.Audiobooks.Where(a => a.IsSelected).ToList();
-        if (selectedAudiobooks.Count == 0) return;
-
-        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).OrderBy(t => t.Name).ToList();
-
-        var pendingAddTags = new ObservableCollection<Tag>();
-        var pendingRemoveTags = new ObservableCollection<Tag>();
-
-        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
-        var captionStyle = Application.Current.Resources["CaptionTextBlockStyle"] as Style;
-
-        var addTagsBox = new CommunityToolkit.WinUI.Controls.TokenizingTextBox
-        {
-            PlaceholderText = "Type a tag and press Enter, or separate with commas",
-            TokenDelimiter = ",",
-            ItemsSource = pendingAddTags,
-            TextMemberPath = "Name"
-        };
-        addTagsBox.TokenItemAdding += (_, args) =>
-        {
-            if (args.Item is Tag) return;
-            var text = args.TokenText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
-            var norm = MultiSelectNormalizeTagName(text);
-            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
-            if (pendingAddTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
-            args.Item = allTags.FirstOrDefault(t => t.NormalizedName == norm)
-                        ?? new Tag { Name = text, NormalizedName = norm };
-        };
-
-        var removeTagsBox = new CommunityToolkit.WinUI.Controls.TokenizingTextBox
-        {
-            PlaceholderText = "Type a tag and press Enter, or separate with commas",
-            TokenDelimiter = ",",
-            ItemsSource = pendingRemoveTags,
-            TextMemberPath = "Name"
-        };
-        removeTagsBox.TokenItemAdding += (_, args) =>
-        {
-            if (args.Item is Tag) return;
-            var text = args.TokenText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
-            var norm = MultiSelectNormalizeTagName(text);
-            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
-            if (pendingRemoveTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
-            var existing = allTags.FirstOrDefault(t => t.NormalizedName == norm);
-            if (existing == null) { args.Cancel = true; return; }
-            args.Item = existing;
-        };
-
-        var addTagButtons = new Dictionary<string, Button>();
-        var removeTagButtons = new Dictionary<string, Button>();
-        CommunityToolkit.WinUI.Controls.WrapPanel? addTagStrip = null;
-        CommunityToolkit.WinUI.Controls.WrapPanel? removeTagStrip = null;
-
-        if (allTags.Count > 0)
-        {
-            addTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
-            removeTagStrip = new CommunityToolkit.WinUI.Controls.WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
-
-            foreach (var tag in allTags)
-            {
-                var capturedTag = tag;
-
-                var addBtn = new Button { Content = "+ " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
-                addBtn.Click += (_, _) =>
-                {
-                    if (!pendingAddTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
-                        pendingAddTags.Add(capturedTag);
-                };
-                addTagButtons[tag.NormalizedName] = addBtn;
-                addTagStrip.Children.Add(addBtn);
-
-                var removeBtn = new Button { Content = "- " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
-                removeBtn.Click += (_, _) =>
-                {
-                    if (!pendingRemoveTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
-                        pendingRemoveTags.Add(capturedTag);
-                };
-                removeTagButtons[tag.NormalizedName] = removeBtn;
-                removeTagStrip.Children.Add(removeBtn);
-            }
-
-            pendingAddTags.CollectionChanged += (_, args) =>
-            {
-                if (args.NewItems != null)
-                    foreach (Tag t in args.NewItems)
-                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
-                if (args.OldItems != null)
-                    foreach (Tag t in args.OldItems)
-                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
-            };
-
-            pendingRemoveTags.CollectionChanged += (_, args) =>
-            {
-                if (args.NewItems != null)
-                    foreach (Tag t in args.NewItems)
-                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
-                if (args.OldItems != null)
-                    foreach (Tag t in args.OldItems)
-                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
-            };
-        }
-
-        StackPanel BuildSection(string title, Panel? strip, CommunityToolkit.WinUI.Controls.TokenizingTextBox tagsBox)
-        {
-            var section = new StackPanel { Spacing = 8 };
-            section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
-            if (strip != null)
-            {
-                section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
-                section.Children.Add(strip);
-            }
-            section.Children.Add(tagsBox);
-            return section;
-        }
-
-        var content = new StackPanel { Spacing = 16, MinWidth = 440, Padding = new Thickness(4) };
-        content.Children.Add(BuildSection("Add Tags", addTagStrip, addTagsBox));
-        content.Children.Add(new Border
-        {
-            Height = 1,
-            Background = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
-            Margin = new Thickness(0, 4, 0, 4)
-        });
-        content.Children.Add(BuildSection("Remove Tags", removeTagStrip, removeTagsBox));
-
-        var count = selectedAudiobooks.Count;
-        var dialog = new ContentDialog
-        {
-            Title = $"Manage Tags — {count} audiobook{(count == 1 ? "" : "s")}",
-            Content = new ScrollViewer
-            {
-                Content = content,
-                MaxHeight = 520,
-                VerticalScrollMode = ScrollMode.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-            },
-            PrimaryButtonText = "OK",
-            SecondaryButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-            MinWidth = 500
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        foreach (var t in MultiSelectParseTagsFromText(addTagsBox.Text ?? string.Empty))
-            if (!pendingAddTags.Any(x => x.NormalizedName == t.NormalizedName))
-                pendingAddTags.Add(allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName) ?? t);
-
-        foreach (var t in MultiSelectParseTagsFromText(removeTagsBox.Text ?? string.Empty))
-        {
-            var existing = allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName);
-            if (existing != null && !pendingRemoveTags.Any(x => x.NormalizedName == t.NormalizedName))
-                pendingRemoveTags.Add(existing);
-        }
-
-        if (pendingAddTags.Count == 0 && pendingRemoveTags.Count == 0) return;
-
-        foreach (var audiobook in selectedAudiobooks)
-        {
-            var modified = false;
-
-            foreach (var addTag in pendingAddTags)
-            {
-                if (!audiobook.Model.Tags.Any(t => t.NormalizedName == addTag.NormalizedName))
-                {
-                    audiobook.Model.Tags.Add(allTags.FirstOrDefault(t => t.NormalizedName == addTag.NormalizedName) ?? addTag);
-                    modified = true;
-                }
-            }
-
-            foreach (var removeTag in pendingRemoveTags)
-            {
-                var match = audiobook.Model.Tags.FirstOrDefault(t => t.NormalizedName == removeTag.NormalizedName);
-                if (match != null)
-                {
-                    audiobook.Model.Tags.Remove(match);
-                    modified = true;
-                }
-            }
-
-            if (modified)
-            {
-                audiobook.IsModified = true;
-                await audiobook.SaveAsync();
-            }
-        }
-
-        await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
-        await ViewModel.RefreshTagsForAudiobooksAsync(selectedAudiobooks);
-    }
-
-    private static string MultiSelectNormalizeTagName(string tagName)
-    {
-        if (string.IsNullOrWhiteSpace(tagName)) return string.Empty;
-        var normalized = tagName.Trim();
-        normalized = new string(normalized.Where(c => char.IsLetterOrDigit(c) ||
-            c == ' ' || c == '-' || c == '|' || c == '/' || c == '_').ToArray());
-        return normalized.ToLowerInvariant();
-    }
-
-    private static List<Tag> MultiSelectParseTagsFromText(string tagsText)
-    {
-        if (string.IsNullOrWhiteSpace(tagsText))
-            return [];
-
-        var tagNames = tagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var tags = new List<Tag>();
-
-        foreach (var tagName in tagNames)
-        {
-            var displayName = tagName.Trim();
-            var normalizedName = MultiSelectNormalizeTagName(tagName);
-            if (string.IsNullOrEmpty(normalizedName)) continue;
-            if (tags.Any(t => t.NormalizedName == normalizedName)) continue;
-            tags.Add(new Tag { Name = displayName, NormalizedName = normalizedName });
-        }
-
-        return tags;
+        await DialogService.ShowManageTagsDialogAsync(selectedAudiobooks);
     }
 
     #endregion
@@ -853,19 +545,14 @@ public sealed partial class LibraryCardPage : Page
 
     private void LibraryCardPage_Unloaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.SelectedTagsChanged -= ViewModelOnSelectedTagsChanged;
         ViewModel.ClearSearchText -= ViewModelOnClearSearchText;
         ViewModel.AvailableTagsReloaded -= ViewModelOnAvailableTagsReloaded;
     }
 
-    private async void ViewModelOnSelectedTagsChanged(object? sender, EventArgs e)
-    {
-        if (_updatingLengthToken || _updatingStatusToken) return;
-        await ApplyFiltersAsync();
-    }
-
     private async void ViewModelOnAvailableTagsReloaded(object? sender, EventArgs e)
     {
+        // SelectedTags may have been pruned (a selected tag was deleted elsewhere).
+        UpdateTagsButtonState();
         await ApplyFiltersAsync();
     }
 
@@ -921,7 +608,7 @@ public sealed partial class LibraryCardPage : Page
     private async void AudiobookSearchBox_TokenItemRemoved(TokenizingTextBox sender, object args)
     {
         // Programmatic chip removal (filter state changed via flyout) — already handled there.
-        if (_updatingStatusToken || _updatingLengthToken) return;
+        if (_updatingLengthToken) return;
 
         try
         {
@@ -934,15 +621,14 @@ public sealed partial class LibraryCardPage : Page
                     return;
                 }
 
-                // Status chip dismissed — uncheck the matching checkbox and re-filter
-                var statusFilter = GetStatusFilterForTag(removedTag);
-                if (statusFilter.HasValue)
-                {
-                    await RemoveStatusFilter(statusFilter.Value);
-                    return;
-                }
+                // Real tag chip dismissed — uncheck the matching row in the Tags dropdown
+                var match = _allTagFilterItems.FirstOrDefault(i => i.Tag.Id == removedTag.Id);
+                if (match != null) match.IsChecked = false;
+
+                UpdateTagsButtonState();
+                UpdateApplyTagsButtonText();
             }
-            // AppShell syncs the nav-pane ListView via SelectedTagsOnCollectionChanged.
+
             await ApplyFiltersAsync();
         }
         finally
@@ -961,22 +647,19 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     private void ReconcileFilterChips()
     {
-        _updatingStatusToken = true;
         _updatingLengthToken = true;
         try
         {
-            foreach (var f in new[] { AudioBookFilter.NotStarted, AudioBookFilter.InProgress, AudioBookFilter.Completed })
-            {
-                if (_activeFilters.Contains(f)) AddStatusFilterToken(f);
-                else RemoveStatusFilterToken(f);
-            }
-
             if (_activeLengthFilter == LengthFilter.Any) RemoveLengthFilterTokens();
             else AddLengthFilterToken(_activeLengthFilter);
+
+            // Checked rows are the source of truth for real tags — re-add any missing chips.
+            foreach (var item in _allTagFilterItems)
+                if (item.IsChecked && !ViewModel.SelectedTags.Any(t => t.Id == item.Tag.Id))
+                    ViewModel.SelectedTags.Add(item.Tag);
         }
         finally
         {
-            _updatingStatusToken = false;
             _updatingLengthToken = false;
         }
     }
@@ -1061,59 +744,101 @@ public sealed partial class LibraryCardPage : Page
 
     #endregion
 
-    #region Status filter tokens
+    #region Tags filter dropdown
 
-    private bool IsStatusFilterTag(Tag t) =>
-        t.Id == StatusInProgressId || t.Id == StatusNotStartedId || t.Id == StatusCompletedId;
-
-    private AudioBookFilter? GetStatusFilterForTag(Tag t) =>
-        t.Id == StatusInProgressId ? AudioBookFilter.InProgress :
-        t.Id == StatusNotStartedId ? AudioBookFilter.NotStarted :
-        t.Id == StatusCompletedId  ? AudioBookFilter.Completed :
-        (AudioBookFilter?)null;
-
-    private void AddStatusFilterToken(AudioBookFilter filter)
+    /// <summary>
+    ///     Rebuilds the master row list from AvailableTags, checked to match SelectedTags.
+    /// </summary>
+    private void RebuildAllTagFilterItems()
     {
-        var (label, id) = filter switch
+        _allTagFilterItems.Clear();
+        foreach (var tag in ViewModel.AvailableTags.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
         {
-            AudioBookFilter.InProgress => ("In Progress", StatusInProgressId),
-            AudioBookFilter.NotStarted => ("Not Started", StatusNotStartedId),
-            AudioBookFilter.Completed  => ("Completed",   StatusCompletedId),
-            _                          => (string.Empty,  Guid.Empty)
-        };
-        if (string.IsNullOrEmpty(label)) return;
-        if (!ViewModel.SelectedTags.Any(t => t.Id == id))
-            ViewModel.SelectedTags.Add(new Tag { Name = label, Id = id });
-    }
-
-    private void RemoveStatusFilterToken(AudioBookFilter filter)
-    {
-        var id = filter switch
-        {
-            AudioBookFilter.InProgress => StatusInProgressId,
-            AudioBookFilter.NotStarted => StatusNotStartedId,
-            AudioBookFilter.Completed  => StatusCompletedId,
-            _                          => Guid.Empty
-        };
-        var existing = ViewModel.SelectedTags.FirstOrDefault(t => t.Id == id);
-        if (existing != null) ViewModel.SelectedTags.Remove(existing);
-    }
-
-    // Called when the user dismisses a status chip via X. The control has already removed
-    // the chip from SelectedTags, so SyncStatusFiltersAsync's token add/removes are all
-    // no-ops here — it must not mutate SelectedTags while the TokenizingTextBox is still
-    // processing the X-click, or the control mis-removes a different chip from its display.
-    private async Task RemoveStatusFilter(AudioBookFilter filter)
-    {
-        _suppressCheckboxHandlers = true;
-        switch (filter)
-        {
-            case AudioBookFilter.InProgress: InProgressFilterCheckBox.IsChecked = false; break;
-            case AudioBookFilter.NotStarted: NotStartedFilterCheckBox.IsChecked = false; break;
-            case AudioBookFilter.Completed:  CompletedFilterCheckBox.IsChecked  = false; break;
+            var isChecked = ViewModel.SelectedTags.Any(s => s.Id == tag.Id);
+            _allTagFilterItems.Add(new TagFilterItem(tag, isChecked));
         }
-        _suppressCheckboxHandlers = false;
-        await SyncStatusFiltersAsync();
+    }
+
+    /// <summary>
+    ///     Rebuilds the ListView's bound subset from the master list, narrowed by search text.
+    /// </summary>
+    private void RefreshDisplayedTagItems(string searchText)
+    {
+        _tagsFilterDisplayItems.Clear();
+        var filtered = string.IsNullOrWhiteSpace(searchText)
+            ? _allTagFilterItems
+            : _allTagFilterItems.Where(i => i.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+        foreach (var item in filtered) _tagsFilterDisplayItems.Add(item);
+
+        if (NoTagsFoundText != null)
+            NoTagsFoundText.Visibility = _tagsFilterDisplayItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateApplyTagsButtonText()
+    {
+        if (ApplyTagsButton == null) return;
+        var count = ViewModel.SelectedTags.Count(t => !IsLengthFilterTag(t));
+        ApplyTagsButton.Content = count > 0 ? $"Apply ({count})" : "Apply";
+    }
+
+    private void TagsFlyout_OnOpened(object sender, object e)
+    {
+        RebuildAllTagFilterItems();
+        if (TagsSearchBox != null) TagsSearchBox.Text = string.Empty;
+        RefreshDisplayedTagItems(string.Empty);
+        UpdateApplyTagsButtonText();
+        TagsSearchBox?.Focus(FocusState.Programmatic);
+    }
+
+    private void TagsSearchBox_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshDisplayedTagItems(TagsSearchBox.Text);
+    }
+
+    /// <summary>
+    ///     Tags apply live, like Length and (previously) Status — checking a box immediately
+    ///     updates the search-bar pills and re-filters the library. Wired to Click rather than
+    ///     Checked/Unchecked so it only fires on real user interaction (see the XAML comment).
+    /// </summary>
+    private async void TagFilterCheckBox_OnToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: TagFilterItem item } checkBox) return;
+
+        // IsChecked binds OneWay (CheckBox.IsChecked is bool?, TagFilterItem.IsChecked is bool),
+        // so push the UI state back into the item manually.
+        item.IsChecked = checkBox.IsChecked == true;
+
+        if (checkBox.IsChecked == true)
+        {
+            if (!ViewModel.SelectedTags.Any(t => t.Id == item.Tag.Id))
+                ViewModel.SelectedTags.Add(item.Tag);
+        }
+        else
+        {
+            var existing = ViewModel.SelectedTags.FirstOrDefault(t => t.Id == item.Tag.Id);
+            if (existing != null) ViewModel.SelectedTags.Remove(existing);
+        }
+
+        UpdateTagsButtonState();
+        UpdateApplyTagsButtonText();
+        await ApplyFiltersAsync();
+    }
+
+    private async void ClearAllTags_OnClick(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in _allTagFilterItems) item.IsChecked = false;
+
+        foreach (var t in ViewModel.SelectedTags.Where(t => !IsLengthFilterTag(t)).ToList())
+            ViewModel.SelectedTags.Remove(t);
+
+        UpdateTagsButtonState();
+        UpdateApplyTagsButtonText();
+        await ApplyFiltersAsync();
+    }
+
+    private void ApplyTagsButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        TagsButton.Flyout.Hide();
     }
 
     #endregion
@@ -1122,8 +847,6 @@ public sealed partial class LibraryCardPage : Page
 
     private bool IsLengthFilterTag(Tag t) =>
         t.Id == LengthShortId || t.Id == LengthMediumId || t.Id == LengthLongId || t.Id == LengthCustomId;
-
-    private bool IsFilterToken(Tag t) => IsLengthFilterTag(t) || IsStatusFilterTag(t);
 
     private void RemoveLengthFilterTokens()
     {

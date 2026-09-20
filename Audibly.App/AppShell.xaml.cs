@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.Storage;
@@ -31,12 +32,9 @@ namespace Audibly.App;
 public sealed partial class AppShell : Page
 {
     private readonly DispatcherQueue _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-    private bool _isSyncingTagSelection;
-    private Tag? _rightClickedTag;
 
     public readonly string LibraryLabel = "Library";
     public readonly string NowPlayingLabel = "Now Playing";
-    public readonly string TagsLabel = "Tags";
 
     /// <summary>
     ///     Initializes a new instance of the AppShell, sets the static 'Current' reference,
@@ -73,15 +71,6 @@ public sealed partial class AppShell : Page
 
         NavView.PaneClosed += (_, _) => { UserSettings.IsSidebarCollapsed = true; };
         NavView.PaneOpened += (_, _) => { UserSettings.IsSidebarCollapsed = false; };
-
-        // Subscribe to clear tag selection event
-        ViewModel.ClearTagSelection += ViewModelOnClearTagSelection;
-
-        // Reverse-sync: when SelectedTags changes (e.g. token removed in search box), update the ListView
-        ViewModel.SelectedTags.CollectionChanged += SelectedTagsOnCollectionChanged;
-
-        // After a full DB reload, re-select matching tags in the ListView
-        ViewModel.AvailableTagsReloaded += ViewModelOnAvailableTagsReloaded;
     }
 
     /// <summary>
@@ -212,234 +201,38 @@ public sealed partial class AppShell : Page
             VisualStateManager.GoToState(this, "Default", true);
     }
 
-    /// <summary>
-    ///     Handles tag selection changes and filters the audiobook list.
-    /// </summary>
-    private void TagsListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    #region Details panel
+
+    private async void DetailsEditBookButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not ListView listView) return;
-        if (_isSyncingTagSelection) return;
-        // Ignore spurious events while AvailableTags is being repopulated (empty ItemsSource = reset in progress)
-        if (ViewModel.AvailableTags.Count == 0) return;
-
-        _isSyncingTagSelection = true;
-
-        var newSelection = listView.SelectedItems.OfType<Tag>().ToList();
-        var toRemove = ViewModel.SelectedTags.Where(s => !newSelection.Any(t => t.Id == s.Id)).ToList();
-        var toAdd = newSelection.Where(t => !ViewModel.SelectedTags.Any(s => s.Id == t.Id)).ToList();
-
-        foreach (var tag in toRemove) ViewModel.SelectedTags.Remove(tag);
-        foreach (var tag in toAdd) ViewModel.SelectedTags.Add(tag);
-
-        _isSyncingTagSelection = false;
-
-        UpdateTagSelectionIndicators(listView);
-        ViewModel.NotifySelectedTagsChanged();
+        var audiobook = ViewModel.SingleSelectedAudiobook;
+        if (audiobook == null) return;
+        await DialogService.ShowEditAudiobookDialogAsync(audiobook);
     }
 
-    /// <summary>
-    ///     When SelectedTags changes externally (e.g. token removed in the search box), sync the ListView.
-    /// </summary>
-    private void SelectedTagsOnCollectionChanged(object? sender,
-        System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    private void DetailsShowInFileExplorerButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_isSyncingTagSelection) return;
+        var audiobook = ViewModel.SingleSelectedAudiobook;
+        if (audiobook == null) return;
 
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            if (TagsListView == null) return;
-            _isSyncingTagSelection = true;
-
-            var toDeselect = TagsListView.SelectedItems.OfType<Tag>()
-                .Where(t => !ViewModel.SelectedTags.Any(s => s.Id == t.Id)).ToList();
-            foreach (var tag in toDeselect)
-                TagsListView.SelectedItems.Remove(tag);
-
-            foreach (var selectedTag in ViewModel.SelectedTags)
-            {
-                var listItem = TagsListView.Items.OfType<Tag>().FirstOrDefault(t => t.Id == selectedTag.Id);
-                if (listItem != null && !TagsListView.SelectedItems.Contains(listItem))
-                    TagsListView.SelectedItems.Add(listItem);
-            }
-
-            UpdateTagSelectionIndicators(TagsListView);
-            _isSyncingTagSelection = false;
-        });
+        Process p = new();
+        p.StartInfo.FileName = "explorer.exe";
+        p.StartInfo.Arguments = $"/select, \"{audiobook.CurrentSourceFile.FilePath}\"";
+        p.Start();
     }
 
-    /// <summary>
-    ///     Updates the visual selection indicators for all tag items.
-    /// </summary>
-    private void UpdateTagSelectionIndicators(ListView listView)
+    private async void DetailsManageTagsButton_OnClick(object sender, RoutedEventArgs e)
     {
-        // Iterate through all containers in the ListView
-        for (int i = 0; i < listView.Items.Count; i++)
-        {
-            var container = listView.ContainerFromIndex(i) as ListViewItem;
-            if (container == null) continue;
-
-            // Find the SelectionIndicator Border in the DataTemplate
-            var grid = FindChild<Grid>(container);
-            var indicator = grid?.FindName("SelectionIndicator") as Border;
-            
-            if (indicator != null)
-            {
-                // Show indicator if this item is selected
-                indicator.Visibility = listView.SelectedItems.Contains(listView.Items[i]) 
-                    ? Visibility.Visible 
-                    : Visibility.Collapsed;
-            }
-        }
+        var selectedAudiobooks = ViewModel.Audiobooks.Where(a => a.IsSelected).ToList();
+        await DialogService.ShowManageTagsDialogAsync(selectedAudiobooks);
     }
 
-    /// <summary>
-    ///     Helper method to find a child element of a specific type in the visual tree.
-    /// </summary>
-    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    private async void DetailsDeleteSelectedButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (parent == null) return null;
-
-        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = VisualTreeHelper.GetChild(parent, i);
-            if (child is T typedChild)
-                return typedChild;
-
-            var result = FindChild<T>(child);
-            if (result != null)
-                return result;
-        }
-        return null;
+        var count = ViewModel.Audiobooks.Count(a => a.IsSelected);
+        if (await DialogService.ConfirmDeleteAudiobooksAsync(count))
+            await ViewModel.DeleteSelectedAudiobooksAsync();
     }
 
-    private void ClearTagsLink_Tapped(object sender, RoutedEventArgs e)
-    {
-        ViewModel.ClearSelectedTags();
-        // ListView sync is handled by SelectedTagsOnCollectionChanged
-        ViewModel.NotifySelectedTagsChanged();
-    }
-
-    private void TagItem_RightTapped(object sender, RightTappedRoutedEventArgs e)
-    {
-        if (TagsListView.SelectedItems.Count > 1) return;
-        if (sender is not FrameworkElement element) return;
-
-        // Walk up the visual tree to the ListViewItem to get the Tag data
-        DependencyObject? current = element;
-        while (current is not null and not ListViewItem)
-            current = VisualTreeHelper.GetParent(current);
-
-        if (current is not ListViewItem { Content: Tag tag }) return;
-
-        _rightClickedTag = tag;
-        var flyout = (MenuFlyout)Resources["TagContextMenu"];
-        flyout.ShowAt(element, new FlyoutShowOptions { Position = e.GetPosition(element) });
-        e.Handled = true;
-    }
-
-    private async void RenameTag_Click(object sender, RoutedEventArgs e)
-    {
-        if (_rightClickedTag is null) return;
-
-        var textBox = new TextBox
-        {
-            Text = _rightClickedTag.Name,
-            PlaceholderText = "New tag name",
-            MinWidth = 260
-        };
-
-        var dialog = new ContentDialog
-        {
-            Title = "Rename Tag",
-            Content = textBox,
-            PrimaryButtonText = "Rename",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        var newName = textBox.Text.Trim();
-        if (string.IsNullOrEmpty(newName) || newName == _rightClickedTag.Name) return;
-
-        var normalizedNew = newName.ToLower();
-        var conflict = ViewModel.AvailableTags.FirstOrDefault(
-            t => t.NormalizedName == normalizedNew && t.Id != _rightClickedTag.Id);
-        if (conflict != null)
-        {
-            await new ContentDialog
-            {
-                Title = "Name Already Exists",
-                Content = $"A tag named \"{conflict.Name}\" already exists.",
-                CloseButtonText = "OK",
-                XamlRoot = XamlRoot
-            }.ShowAsync();
-            return;
-        }
-
-        await ViewModel.RenameTagAsync(_rightClickedTag, newName);
-    }
-
-    private async void RemoveTag_Click(object sender, RoutedEventArgs e)
-    {
-        if (_rightClickedTag is null) return;
-
-        var dialog = new ContentDialog
-        {
-            Title = "Remove Tag",
-            Content = $"Remove \"{_rightClickedTag.Name}\"? This tag will be removed from all audiobooks.",
-            PrimaryButtonText = "Remove",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary) return;
-
-        await ViewModel.DeleteTagAsync(_rightClickedTag);
-    }
-
-    private void ViewModelOnClearTagSelection()
-    {
-        // Clear visual selection in the ListView and update indicators
-        if (TagsListView != null)
-        {
-            TagsListView.SelectedItems.Clear();
-            UpdateTagSelectionIndicators(TagsListView);
-        }
-    }
-
-    /// <summary>
-    ///     After a full DB reload, re-select any ListView rows that match SelectedTags.
-    /// </summary>
-    private void ViewModelOnAvailableTagsReloaded(object? sender, EventArgs e)
-    {
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            if (TagsListView == null) return;
-            _isSyncingTagSelection = true;
-
-            TagsListView.SelectedItems.Clear();
-            foreach (var tag in ViewModel.SelectedTags)
-            {
-                var listItem = TagsListView.Items.OfType<Tag>().FirstOrDefault(t => t.Id == tag.Id);
-                if (listItem != null) TagsListView.SelectedItems.Add(listItem);
-            }
-
-            _isSyncingTagSelection = false;
-
-            // Containers are not yet realized at this point because the XAML layout pass hasn't
-            // run — ContainerFromIndex returns null for every item. Defer the indicator update
-            // until after the layout pass so recycled containers don't carry stale Visibility state.
-            void OnLayoutUpdated(object? s, object a)
-            {
-                TagsListView.LayoutUpdated -= OnLayoutUpdated;
-                UpdateTagSelectionIndicators(TagsListView);
-            }
-            TagsListView.LayoutUpdated += OnLayoutUpdated;
-        });
-    }
+    #endregion
 }

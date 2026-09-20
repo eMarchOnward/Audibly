@@ -627,6 +627,231 @@ public static class DialogService
         }
     }
 
+    /// <summary>
+    ///     Confirms and, if accepted, permanently deletes the given audiobooks.
+    /// </summary>
+    internal static async Task<bool> ConfirmDeleteAudiobooksAsync(int count)
+    {
+        var xamlRoot = GetXamlRoot();
+        if (xamlRoot == null || count == 0) return false;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Delete selected",
+            Content = $"Permanently delete {count} audiobook{(count == 1 ? "" : "s")}? This cannot be undone.",
+            PrimaryButtonText = "Delete",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Secondary,
+            XamlRoot = App.Window.Content.XamlRoot,
+            RequestedTheme = ThemeHelper.ActualTheme
+        };
+
+        return await dialog.ShowOneAtATimeAsync() == ContentDialogResult.Primary;
+    }
+
+    /// <summary>
+    ///     Shows the "Manage Tags" dialog for a batch of audiobooks, letting the user add tags to and/or
+    ///     remove tags from all of them at once. Saves changes itself; callers don't need to do anything
+    ///     further. Shared by the library's multi-select action bar and the nav-pane details panel.
+    /// </summary>
+    internal static async Task ShowManageTagsDialogAsync(IReadOnlyList<AudiobookViewModel> selectedAudiobooks)
+    {
+        var xamlRoot = GetXamlRoot();
+        if (xamlRoot == null || selectedAudiobooks.Count == 0) return;
+
+        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).OrderBy(t => t.Name).ToList();
+
+        var pendingAddTags = new ObservableCollection<Tag>();
+        var pendingRemoveTags = new ObservableCollection<Tag>();
+
+        var sectionLabelStyle = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
+        var captionStyle = Application.Current.Resources["CaptionTextBlockStyle"] as Style;
+
+        var addTagsBox = new TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingAddTags,
+            TextMemberPath = "Name"
+        };
+        addTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = AudiobookEditHelpers.NormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingAddTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            args.Item = allTags.FirstOrDefault(t => t.NormalizedName == norm)
+                        ?? new Tag { Name = text, NormalizedName = norm };
+        };
+
+        var removeTagsBox = new TokenizingTextBox
+        {
+            PlaceholderText = "Type a tag and press Enter, or separate with commas",
+            TokenDelimiter = ",",
+            ItemsSource = pendingRemoveTags,
+            TextMemberPath = "Name"
+        };
+        removeTagsBox.TokenItemAdding += (_, args) =>
+        {
+            if (args.Item is Tag) return;
+            var text = args.TokenText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text)) { args.Cancel = true; return; }
+            var norm = AudiobookEditHelpers.NormalizeTagName(text);
+            if (string.IsNullOrEmpty(norm)) { args.Cancel = true; return; }
+            if (pendingRemoveTags.Any(t => t.NormalizedName == norm)) { args.Cancel = true; return; }
+            var existing = allTags.FirstOrDefault(t => t.NormalizedName == norm);
+            if (existing == null) { args.Cancel = true; return; }
+            args.Item = existing;
+        };
+
+        var addTagButtons = new Dictionary<string, Button>();
+        var removeTagButtons = new Dictionary<string, Button>();
+        WrapPanel? addTagStrip = null;
+        WrapPanel? removeTagStrip = null;
+
+        if (allTags.Count > 0)
+        {
+            addTagStrip = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
+            removeTagStrip = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
+
+            foreach (var tag in allTags)
+            {
+                var capturedTag = tag;
+
+                var addBtn = new Button { Content = "+ " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                addBtn.Click += (_, _) =>
+                {
+                    if (!pendingAddTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingAddTags.Add(capturedTag);
+                };
+                addTagButtons[tag.NormalizedName] = addBtn;
+                addTagStrip.Children.Add(addBtn);
+
+                var removeBtn = new Button { Content = "- " + tag.Name, Padding = new Thickness(8, 4, 8, 4), FontSize = 12 };
+                removeBtn.Click += (_, _) =>
+                {
+                    if (!pendingRemoveTags.Any(t => t.NormalizedName == capturedTag.NormalizedName))
+                        pendingRemoveTags.Add(capturedTag);
+                };
+                removeTagButtons[tag.NormalizedName] = removeBtn;
+                removeTagStrip.Children.Add(removeBtn);
+            }
+
+            pendingAddTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (addTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+
+            pendingRemoveTags.CollectionChanged += (_, args) =>
+            {
+                if (args.NewItems != null)
+                    foreach (Tag t in args.NewItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Collapsed;
+                if (args.OldItems != null)
+                    foreach (Tag t in args.OldItems)
+                        if (removeTagButtons.TryGetValue(t.NormalizedName, out var btn)) btn.Visibility = Visibility.Visible;
+            };
+        }
+
+        StackPanel BuildSection(string title, Panel? strip, TokenizingTextBox tagsBox)
+        {
+            var section = new StackPanel { Spacing = 8 };
+            section.Children.Add(new TextBlock { Text = title, Style = sectionLabelStyle });
+            if (strip != null)
+            {
+                section.Children.Add(new TextBlock { Text = "Available Tags", Style = captionStyle, Opacity = 0.7 });
+                section.Children.Add(strip);
+            }
+            section.Children.Add(tagsBox);
+            return section;
+        }
+
+        var content = new StackPanel { Spacing = 16, MinWidth = 440, Padding = new Thickness(4) };
+        content.Children.Add(BuildSection("Add Tags", addTagStrip, addTagsBox));
+        content.Children.Add(new Border
+        {
+            Height = 1,
+            Background = (Brush)Application.Current.Resources["ControlStrokeColorDefaultBrush"],
+            Margin = new Thickness(0, 4, 0, 4)
+        });
+        content.Children.Add(BuildSection("Remove Tags", removeTagStrip, removeTagsBox));
+
+        var count = selectedAudiobooks.Count;
+        var dialog = new ContentDialog
+        {
+            Title = $"Manage Tags — {count} audiobook{(count == 1 ? "" : "s")}",
+            Content = new ScrollViewer
+            {
+                Content = content,
+                MaxHeight = 520,
+                VerticalScrollMode = ScrollMode.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            },
+            PrimaryButtonText = "OK",
+            SecondaryButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = App.Window.Content.XamlRoot,
+            RequestedTheme = ThemeHelper.ActualTheme,
+            MinWidth = 500
+        };
+
+        var result = await dialog.ShowOneAtATimeAsync();
+        if (result != ContentDialogResult.Primary) return;
+
+        foreach (var t in AudiobookEditHelpers.ParseTagsFromText(addTagsBox.Text ?? string.Empty))
+            if (!pendingAddTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingAddTags.Add(allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName) ?? t);
+
+        foreach (var t in AudiobookEditHelpers.ParseTagsFromText(removeTagsBox.Text ?? string.Empty))
+        {
+            var existing = allTags.FirstOrDefault(a => a.NormalizedName == t.NormalizedName);
+            if (existing != null && !pendingRemoveTags.Any(x => x.NormalizedName == t.NormalizedName))
+                pendingRemoveTags.Add(existing);
+        }
+
+        if (pendingAddTags.Count == 0 && pendingRemoveTags.Count == 0) return;
+
+        foreach (var audiobook in selectedAudiobooks)
+        {
+            var modified = false;
+
+            foreach (var addTag in pendingAddTags)
+            {
+                if (!audiobook.Model.Tags.Any(t => t.NormalizedName == addTag.NormalizedName))
+                {
+                    audiobook.Model.Tags.Add(allTags.FirstOrDefault(t => t.NormalizedName == addTag.NormalizedName) ?? addTag);
+                    modified = true;
+                }
+            }
+
+            foreach (var removeTag in pendingRemoveTags)
+            {
+                var match = audiobook.Model.Tags.FirstOrDefault(t => t.NormalizedName == removeTag.NormalizedName);
+                if (match != null)
+                {
+                    audiobook.Model.Tags.Remove(match);
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                audiobook.IsModified = true;
+                await audiobook.SaveAsync();
+            }
+        }
+
+        await App.Repository.Audiobooks.DeleteOrphanedTagsAsync();
+        await ViewModel.RefreshTagsForAudiobooksAsync(selectedAudiobooks);
+    }
+
     internal static async Task ShowProgressDialogAsync(string title, CancellationTokenSource? cts,
         bool showCancelButton = true)
     {

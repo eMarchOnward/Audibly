@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:models="using:Audibly.Models"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:userControls="using:Audibly.App.UserControls"
@@ -14,22 +15,6 @@
     Loaded="AppShell_OnLoaded"
     TabNavigation="Cycle"
     mc:Ignorable="d">
-
-    <Page.Resources>
-        <MenuFlyout x:Key="TagContextMenu">
-            <MenuFlyoutItem x:Name="RenameTagItem" Text="Rename" Click="RenameTag_Click">
-                <MenuFlyoutItem.Icon>
-                    <FontIcon Glyph="&#xE8AC;" />
-                </MenuFlyoutItem.Icon>
-            </MenuFlyoutItem>
-            <MenuFlyoutSeparator />
-            <MenuFlyoutItem x:Name="RemoveTagItem" Text="Remove" Click="RemoveTag_Click">
-                <MenuFlyoutItem.Icon>
-                    <FontIcon Glyph="&#xE74D;" />
-                </MenuFlyoutItem.Icon>
-            </MenuFlyoutItem>
-        </MenuFlyout>
-    </Page.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -99,88 +84,225 @@
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
                 <muxc:NavigationViewItem
-                    x:Name="TagsMenuItem"
-                    Content="{x:Bind TagsLabel}"
                     SelectsOnInvoked="False"
-                    ToolTipService.ToolTip="{x:Bind TagsLabel}">
-                    <muxc:NavigationViewItem.Icon>
-                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE1CB;" />
-                    </muxc:NavigationViewItem.Icon>
+                    Padding="0"
+                    Margin="0"
+                    HorizontalContentAlignment="Stretch"
+                    HorizontalAlignment="Stretch"
+                    Visibility="{x:Bind ViewModel.HasAnySelected, Mode=OneWay}">
+                    <muxc:NavigationViewItem.Content>
+                        <!--  Gated on the pane being open (not just something being selected), so it's
+                              hidden while collapsed and only appears once the pane is expanded.  -->
+                        <ScrollViewer
+                            MaxHeight="420"
+                            VerticalScrollBarVisibility="Auto"
+                            VerticalScrollMode="Auto"
+                            Visibility="{x:Bind viewModels:Converters.CollapsedIfNot(ViewModel.HasAnySelected, NavView.IsPaneOpen), Mode=OneWay}">
+                            <StackPanel Margin="-20,0,-20,0" HorizontalAlignment="Stretch" Padding="20,8,20,8" Spacing="16">
 
-                    <!-- reduce indentation of children so they align with the 'Tags' label -->
-                    <muxc:NavigationViewItem.MenuItems>
-                        <!-- Remove the built-in padding of this child NavigationViewItem and shift its content left -->
-                        <muxc:NavigationViewItem SelectsOnInvoked="False" Padding="0" Margin="0"
-                                                 HorizontalContentAlignment="Stretch" HorizontalAlignment="Stretch">
-                            <muxc:NavigationViewItem.Content>
-                                <!-- Negative left margin offsets the nav submenu indent so child content lines up with the parent label -->
-                                <StackPanel Margin="-20,0,-20,0" HorizontalAlignment="Stretch">
-                                    <!-- Show all link (left aligned and styled like tag rows) -->
-                                    <HyperlinkButton
-                                        x:Name="ClearTagsLink"
-                                        Margin="10,4,0,6"
-                                        Padding="3"
-                                        HorizontalAlignment="Left"
-                                        IsHitTestVisible="True"
-                                        Click="ClearTagsLink_Tapped"
-                                        BorderThickness="0">
-                                        <TextBlock Text="Show All" TextDecorations="None" />
-                                    </HyperlinkButton>
+                        <!--  One book selected  -->
+                        <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.HasSingleSelected, Mode=OneWay}">
 
-                                    <ListView
-                                        x:Name="TagsListView"
-                                        ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}"
-                                        SelectionMode="Extended"
-                                        SelectionChanged="TagsListView_SelectionChanged"
-                                        ScrollViewer.VerticalScrollMode="Disabled"
-                                        ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                                        Margin="0"
-                                        Padding="0"
-                                        BorderThickness="0"
-                                        HorizontalAlignment="Stretch">
-                                        <ListView.ItemContainerStyle>
-                                            <Style TargetType="ListViewItem">
-                                                <!-- remove left padding that ListViewItems normally have -->
-                                                <Setter Property="Padding" Value="0"/>
-                                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                                <Setter Property="MinHeight" Value="32"/>
-                                                <Setter Property="Margin" Value="0"/>
-                                            </Style>
-                                        </ListView.ItemContainerStyle>
-                                        <ListView.ItemTemplate>
-                                            <DataTemplate x:DataType="models:Tag">
-                                                <Grid HorizontalAlignment="Stretch" RightTapped="TagItem_RightTapped">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="3"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    
-                                                    <!-- Selection indicator bar -->
-                                                    <Border 
-                                                        Grid.Column="0"
-                                                        Background="{ThemeResource SystemAccentColor}"
-                                                        Visibility="Collapsed"
-                                                        x:Name="SelectionIndicator"/>
-                                                    
-                                                    <!-- Tag name -->
-                                                    <TextBlock 
-                                                        Grid.Column="1"
-                                                        Text="{x:Bind Name}" 
-                                                        Margin="10,4,0,4"
-                                                        VerticalAlignment="Center"
-                                                        TextWrapping="Wrap"
-                                                        TextTrimming="CharacterEllipsis"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ListView.ItemTemplate>
-                                    </ListView>
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border
+                                    Grid.Column="0"
+                                    Width="36"
+                                    Height="36"
+                                    CornerRadius="4">
+                                    <Border.Background>
+                                        <ImageBrush ImageSource="{x:Bind ViewModel.SingleSelectedAudiobook.ThumbnailPath, Mode=OneWay}" Stretch="UniformToFill" />
+                                    </Border.Background>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        MaxLines="2"
+                                        Text="{x:Bind ViewModel.SingleSelectedAudiobook.Title, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.7"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind ViewModel.SingleSelectedAudiobook.Author, Mode=OneWay}"
+                                        TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                            </muxc:NavigationViewItem.Content>
-                        </muxc:NavigationViewItem>
-                    </muxc:NavigationViewItem.MenuItems>
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="FORMAT" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.FormatDisplayText, Mode=OneWay}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="DATE ADDED" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.DateAddedDisplayText, Mode=OneWay}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="LAST PLAYED" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.LastPlayedDisplayText, Mode=OneWay}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="CHAPTERS" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.Chapters.Count, Mode=OneWay}" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="BOOKMARKS" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.Model.Bookmarks.Count, Mode=OneWay}" />
+                            </Grid>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="TAGS" />
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.SingleSelectedAudiobook.Model.Tags, Mode=OneWay}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <controls:WrapPanel HorizontalSpacing="4" VerticalSpacing="4" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Tag">
+                                            <Border Background="{ThemeResource ControlFillColorDefaultBrush}" CornerRadius="10" Padding="8,2">
+                                                <TextBlock FontSize="12" Text="{x:Bind Name}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <Button
+                                Click="DetailsEditBookButton_OnClick"
+                                Content="Edit Book Details"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                            <Button
+                                Click="DetailsShowInFileExplorerButton_OnClick"
+                                Content="Show in File Explorer"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+                        </StackPanel>
+
+                        <!--  Multiple books selected  -->
+                        <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.HasMultipleSelected, Mode=OneWay}">
+
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="18" Glyph="&#xE736;" />
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Text="{x:Bind ViewModel.SelectedCount, Mode=OneWay}"
+                                    VerticalAlignment="Center" />
+                                <TextBlock FontWeight="SemiBold" Text="Books Selected" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="TOTAL LENGTH" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SelectedTotalLengthText, Mode=OneWay}" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="FORMATS" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SelectedFormatsBreakdownText, Mode=OneWay}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="SHARED TAGS" />
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.SelectedSharedTags, Mode=OneWay}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <controls:WrapPanel HorizontalSpacing="4" VerticalSpacing="4" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Tag">
+                                            <Border Background="{ThemeResource ControlFillColorDefaultBrush}" CornerRadius="10" Padding="8,2">
+                                                <TextBlock FontSize="12" Text="{x:Bind Name}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <HyperlinkButton Click="DetailsManageTagsButton_OnClick" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="13" Glyph="&#xE8EC;" VerticalAlignment="Center" />
+                                    <TextBlock Text="Manage Tags" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </HyperlinkButton>
+                            <HyperlinkButton Click="DetailsDeleteSelectedButton_OnClick" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0,4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="13" Glyph="&#xE74D;" VerticalAlignment="Center" />
+                                    <TextBlock Text="Delete Selected" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </HyperlinkButton>
+                        </StackPanel>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </muxc:NavigationViewItem.Content>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
-
             <muxc:NavigationView.PaneFooter>
                 <StackPanel>
                     <muxc:NavigationViewItem

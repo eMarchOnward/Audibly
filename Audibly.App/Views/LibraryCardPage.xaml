@@ -47,6 +47,7 @@
             Invoked="DebugMenuKeyboardAccelerator_OnInvoked"
             Key="F12"
             Modifiers="Control,Shift" />
+        <KeyboardAccelerator Invoked="ClearSelectionKeyboardAccelerator_OnInvoked" Key="Escape" />
     </Page.KeyboardAccelerators>
 
     <RelativePanel Padding="36,36,48,0" x:Name="LayoutRoot">
@@ -147,43 +148,85 @@
                         </AppBarButton.Flyout>
                     </AppBarButton>
 
-                    <!-- Status (progress filter) button -->
+                    <!-- Tags filter button -->
                     <AppBarButton
-                        Label="Status"
-                        ToolTipService.ToolTip="Filter by Status"
-                        x:Name="FilterButton">
+                        Label="Tags"
+                        ToolTipService.ToolTip="Filter by Tags"
+                        x:Name="TagsButton">
                         <Grid Width="40">
-                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE71C;" FontSize="20" HorizontalAlignment="Center" />
+                            <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8EC;" FontSize="20" HorizontalAlignment="Center" />
                             <Ellipse
-                                x:Name="StatusFilterDot"
+                                x:Name="TagsFilterDot"
                                 Width="8" Height="8"
                                 Fill="Red"
                                 HorizontalAlignment="Left" VerticalAlignment="Top"
                                 Visibility="Collapsed" />
                         </Grid>
                         <AppBarButton.Flyout>
-                            <Flyout Placement="BottomEdgeAlignedLeft">
-                                <StackPanel Orientation="Vertical" Spacing="2">
-                                    <HyperlinkButton
-                                        Click="ResetStatusFilters_OnClick"
-                                        Content="Reset"
-                                        Padding="0,2,0,4"
-                                        x:Name="ResetStatusLink" />
-                                    <CheckBox
-                                        Checked="StatusFilterCheckBox_OnToggled"
-                                        Content="Not Started"
-                                        Unchecked="StatusFilterCheckBox_OnToggled"
-                                        x:Name="NotStartedFilterCheckBox" />
-                                    <CheckBox
-                                        Checked="StatusFilterCheckBox_OnToggled"
-                                        Content="In Progress"
-                                        Unchecked="StatusFilterCheckBox_OnToggled"
-                                        x:Name="InProgressFilterCheckBox" />
-                                    <CheckBox
-                                        Checked="StatusFilterCheckBox_OnToggled"
-                                        Content="Completed"
-                                        Unchecked="StatusFilterCheckBox_OnToggled"
-                                        x:Name="CompletedFilterCheckBox" />
+                            <Flyout Placement="BottomEdgeAlignedLeft" Opened="TagsFlyout_OnOpened">
+                                <StackPanel Orientation="Vertical" Spacing="8" Width="260">
+                                    <TextBox
+                                        x:Name="TagsSearchBox"
+                                        PlaceholderText="Search tags..."
+                                        TextChanged="TagsSearchBox_OnTextChanged" />
+
+                                    <ListView
+                                        x:Name="TagsFilterListView"
+                                        ItemsSource="{x:Bind TagsFilterDisplayItems}"
+                                        SelectionMode="None"
+                                        MaxHeight="320"
+                                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                        ScrollViewer.VerticalScrollMode="Auto"
+                                        Margin="0"
+                                        Padding="0"
+                                        BorderThickness="0"
+                                        HorizontalAlignment="Stretch">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem">
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="MinHeight" Value="32" />
+                                                <Setter Property="Margin" Value="0" />
+                                            </Style>
+                                        </ListView.ItemContainerStyle>
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="viewModels:TagFilterItem">
+                                                <!--  Click (not Checked/Unchecked) — Checked/Unchecked also fire when the
+                                                      ListView rebuilds and rebinds a recycled container to an already-
+                                                      checked item, not just on real user interaction. Click only fires
+                                                      from an actual click/keyboard activation.  -->
+                                                <CheckBox
+                                                    Content="{x:Bind Name}"
+                                                    IsChecked="{x:Bind IsChecked, Mode=OneWay}"
+                                                    Click="TagFilterCheckBox_OnToggled"
+                                                    HorizontalAlignment="Stretch" />
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+
+                                    <TextBlock
+                                        Text="No tags found."
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Visibility="Collapsed"
+                                        x:Name="NoTagsFoundText" />
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <HyperlinkButton
+                                            Grid.Column="0"
+                                            Content="Clear All"
+                                            Click="ClearAllTags_OnClick"
+                                            Padding="0"
+                                            HorizontalAlignment="Left" />
+                                        <Button
+                                            Grid.Column="1"
+                                            Click="ApplyTagsButton_OnClick"
+                                            Content="Apply"
+                                            x:Name="ApplyTagsButton" />
+                                    </Grid>
                                 </StackPanel>
                             </Flyout>
                         </AppBarButton.Flyout>

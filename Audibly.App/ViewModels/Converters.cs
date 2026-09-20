@@ -42,6 +42,14 @@ public static class Converters
     }
 
     /// <summary>
+    ///     Returns Visibility.Visible only when both values are true; otherwise, returns Visibility.Collapsed.
+    /// </summary>
+    public static Visibility CollapsedIfNot(bool a, bool b)
+    {
+        return a && b ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
     ///     Returns Visibility.Collapsed if the specified value is null; otherwise, returns Visibility.Visible.
     /// </summary>
     public static Visibility CollapsedIfNull(object? value)
