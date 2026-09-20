@@ -8,11 +8,14 @@ using System.Threading.Tasks;
 using Audibly.App.ViewModels;
 using Audibly.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.UI.Xaml.Controls;
 
 namespace Audibly.App.Services;
 
 public class BookmarkService
 {
+    private const long DuplicateToleranceMs = 1000;
+
     /// <summary>
     ///     Load bookmarks for an audiobook, ordered by position ascending.
     /// </summary>
@@ -42,6 +45,17 @@ public class BookmarkService
                 // SourceFile.Duration is in seconds; convert to ms
                 absolutePositionMs += nowPlaying.SourcePaths[i].Duration * 1000;
             }
+        }
+
+        // Skip if a bookmark already exists within +/- 1 second of this position
+        if (nowPlaying.Model.Bookmarks.Any(b => Math.Abs(b.PositionMs - absolutePositionMs) <= DuplicateToleranceMs))
+        {
+            App.ViewModel.EnqueueNotification(new Notification
+            {
+                Message = "A bookmark already exists at this position.",
+                Severity = InfoBarSeverity.Informational
+            });
+            return null;
         }
 
         var note = string.IsNullOrWhiteSpace(noteText)
