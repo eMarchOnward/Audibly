@@ -9,7 +9,8 @@
     xmlns:winUi="using:CommunityToolkit.WinUI"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:Audibly.Models"
-    xmlns:converters="using:Audibly.App.Helpers.Converters">
+    xmlns:converters="using:Audibly.App.Helpers.Converters"
+    xmlns:viewModels="using:Audibly.App.ViewModels">
     <!--  ReSharper disable all Xaml.RedundantResource  -->
     <UserControl.Resources>
         <MenuFlyout
@@ -115,7 +116,8 @@
             <Border
                 BorderThickness="0"
                 Grid.Row="0"
-                MaxHeight="{x:Bind ViewModel.AudiobookTileWidth, Mode=OneWay}"
+                Width="{x:Bind viewModels:Converters.TileCoverSize(ViewModel.AudiobookTileWidth), Mode=OneWay}"
+                MaxHeight="{x:Bind viewModels:Converters.TileCoverSize(ViewModel.AudiobookTileWidth), Mode=OneWay}"
                 x:Name="CoverShadowBorder">
                 <Border
                     BorderBrush="Transparent"
@@ -123,10 +125,7 @@
                     CornerRadius="{StaticResource OverlayCornerRadius}">
                     <Grid>
                         <Image Source="ms-appx:///Assets/DefaultCoverImage.png" Stretch="UniformToFill" />
-                        <ContentPresenter
-                            Content="{x:Bind Source, Mode=OneWay}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Top" />
+                        <ContentPresenter Content="{x:Bind Source, Mode=OneWay}" />
                     </Grid>
                 </Border>
                 <winUi:Effects.Shadow>

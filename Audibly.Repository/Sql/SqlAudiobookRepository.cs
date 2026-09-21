@@ -329,8 +329,9 @@ public class SqlAudiobookRepository(AudiblyContext db) : IAudiobookRepository
 
     public async Task<IEnumerable<Tag>> GetAllTagsAsync()
     {
+        // Not sorted here: display order (symbols before letters) can't be expressed in SQL and is
+        // applied by callers in the app layer via AudiobookEditHelpers.TagNameComparer.
         return await db.Tags
-            .OrderBy(tag => tag.Name)
             .AsNoTracking()
             .ToListAsync();
     }

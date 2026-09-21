@@ -751,8 +751,9 @@ public sealed partial class LibraryCardPage : Page
     /// </summary>
     private void RebuildAllTagFilterItems()
     {
+        // ViewModel.AvailableTags is already sorted consistently (see AudiobookEditHelpers.TagNameComparer).
         _allTagFilterItems.Clear();
-        foreach (var tag in ViewModel.AvailableTags.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var tag in ViewModel.AvailableTags)
         {
             var isChecked = ViewModel.SelectedTags.Any(s => s.Id == tag.Id);
             _allTagFilterItems.Add(new TagFilterItem(tag, isChecked));

@@ -5,9 +5,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:developerTools="using:CommunityToolkit.WinUI.DeveloperTools"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:Audibly.Models"
     xmlns:sys="using:System"
     xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     xmlns:ui="using:CommunityToolkit.WinUI"
+    xmlns:viewModels="using:Audibly.App.ViewModels"
     xmlns:views="using:Audibly.App.Views"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--  ReSharper disable all Xaml.RedundantResource  -->
@@ -300,6 +302,56 @@
                     </toolkit:SettingsExpander.Items>
                 </toolkit:SettingsExpander>
 
+                <!--  Tag Management  -->
+                <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="Tag Management" />
+                <toolkit:SettingsExpander Description="Rename or delete tags used across your library." Header="Tags" IsExpanded="True">
+                    <toolkit:SettingsExpander.HeaderIcon>
+                        <FontIcon Glyph="&#xE8EC;" />
+                    </toolkit:SettingsExpander.HeaderIcon>
+                    <toolkit:SettingsExpander.Items>
+                        <toolkit:SettingsCard HorizontalContentAlignment="Stretch">
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="No tags yet."
+                                    Visibility="{x:Bind viewModels:Converters.VisibleIfZero(ViewModel.AvailableTags.Count), Mode=OneWay}" />
+                                <ItemsControl ItemsSource="{x:Bind ViewModel.AvailableTags, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="models:Tag">
+                                            <Grid ColumnSpacing="8" Padding="0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Grid.Column="0"
+                                                    Text="{x:Bind Name}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    VerticalAlignment="Center" />
+                                                <Button
+                                                    Grid.Column="1"
+                                                    Click="RenameTagButton_OnClick"
+                                                    Tag="{x:Bind}"
+                                                    ToolTipService.ToolTip="Rename tag">
+                                                    <FontIcon FontSize="14" Glyph="&#xE70F;" />
+                                                </Button>
+                                                <Button
+                                                    Grid.Column="2"
+                                                    Click="DeleteTagButton_OnClick"
+                                                    Tag="{x:Bind}"
+                                                    ToolTipService.ToolTip="Delete tag">
+                                                    <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </toolkit:SettingsCard>
+                    </toolkit:SettingsExpander.Items>
+                </toolkit:SettingsExpander>
+
                 <!--  Donate  -->
                 <TextBlock Style="{StaticResource SettingsSectionHeaderTextBlockStyle}" Text="Donate" />
 
@@ -381,10 +433,10 @@
                                 Text="git clone https://github.com/rstewa/Audibly" />
                         </toolkit:SettingsCard>
                         <toolkit:SettingsCard
-                            Click="bugRequestCard_Click"
-                            Header="File a bug report"
-                            IsClickEnabled="True"
-                            x:Name="bugRequestCard">
+                            Click="ViewCodeCard_Click"
+                            Description="This build is a personal fork of the original Audibly project."
+                            Header="View Code"
+                            IsClickEnabled="True">
                             <toolkit:SettingsCard.ActionIcon>
                                 <FontIcon Glyph="&#xE8A7;" />
                             </toolkit:SettingsCard.ActionIcon>
@@ -403,6 +455,10 @@
                                     Content="GitHub repository"
                                     NavigateUri="https://github.com/rstewa/Audibly"
                                     x:Name="GitHubButton" />
+                                <HyperlinkButton
+                                    Content="This fork's repository (eMarchOnward/Audibly)"
+                                    NavigateUri="https://github.com/eMarchOnward/Audibly"
+                                    x:Name="ForkRepoButton" />
                             </StackPanel>
                         </toolkit:SettingsCard>
                     </toolkit:SettingsExpander.Items>

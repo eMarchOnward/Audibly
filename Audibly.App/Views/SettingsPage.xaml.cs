@@ -69,9 +69,9 @@ public sealed partial class SettingsPage : Page
         }
     }
 
-    private async void bugRequestCard_Click(object sender, RoutedEventArgs e)
+    private async void ViewCodeCard_Click(object sender, RoutedEventArgs e)
     {
-        await Launcher.LaunchUriAsync(new Uri("https://github.com/rstewa/Audibly/issues/new/choose"));
+        await Launcher.LaunchUriAsync(new Uri("https://github.com/eMarchOnward/Audibly"));
     }
 
     private async void donateCard_Click(object sender, RoutedEventArgs e)
@@ -102,6 +102,18 @@ public sealed partial class SettingsPage : Page
 
         // wait 1 second and change back to copy icon
         Task.Delay(1000).ContinueWith(_ => DispatcherQueue.TryEnqueue(() => CopyIcon.Glyph = "\uE8C8"));
+    }
+
+    private async void RenameTagButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: Audibly.Models.Tag tag }) return;
+        await DialogService.ShowRenameTagDialogAsync(tag);
+    }
+
+    private async void DeleteTagButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: Audibly.Models.Tag tag }) return;
+        await DialogService.ConfirmDeleteTagAsync(tag);
     }
 
     private void OpenAppStateFolderInFileExplorer_Click(object sender, RoutedEventArgs e)

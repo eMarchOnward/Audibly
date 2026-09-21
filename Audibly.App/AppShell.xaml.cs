@@ -35,6 +35,7 @@ public sealed partial class AppShell : Page
 
     public readonly string LibraryLabel = "Library";
     public readonly string NowPlayingLabel = "Now Playing";
+    public readonly string AppBrandingLabel = $"Audibly eHead {Constants.Version}";
 
     /// <summary>
     ///     Initializes a new instance of the AppShell, sets the static 'Current' reference,
@@ -71,6 +72,66 @@ public sealed partial class AppShell : Page
 
         NavView.PaneClosed += (_, _) => { UserSettings.IsSidebarCollapsed = true; };
         NavView.PaneOpened += (_, _) => { UserSettings.IsSidebarCollapsed = false; };
+
+        // Collapse the description back down whenever the selected book changes.
+        ViewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(MainViewModel.SingleSelectedAudiobook))
+                ResetDescriptionExpand();
+        };
+
+        // Keep the details panel's scrollable area filling the space between "Now Playing" and the
+        // pane footer branding as the window is resized. LayoutUpdated covers every case that can
+        // change that space (window resize, pane open/close, selection changing) without needing to
+        // enumerate them individually.
+        NavView.SizeChanged += (_, _) => UpdateDetailsScrollViewerHeight();
+        LayoutUpdated += (_, _) => UpdateDetailsScrollViewerHeight();
+
+        // Keep the details panel's scrollbar hidden until the pointer is actually over the
+        // panel, instead of WinUI's default idle-thin-line behavior. Loaded fires even while
+        // the ScrollViewer is Visibility="Collapsed", so this wiring happens once, early.
+        DetailsScrollViewer.Loaded += (_, _) =>
+        {
+            DetailsScrollViewer.ApplyTemplate();
+            var verticalScrollBar = DetailsScrollViewer.FindDescendant("VerticalScrollBar") as ScrollBar;
+            if (verticalScrollBar == null) return;
+
+            verticalScrollBar.Opacity = 0;
+            DetailsScrollViewer.PointerEntered += (_, _) => verticalScrollBar.Opacity = 1;
+            DetailsScrollViewer.PointerExited += (_, _) => verticalScrollBar.Opacity = 0;
+        };
+    }
+
+    private double _lastDetailsMaxHeight = -1;
+
+    /// <summary>
+    ///     Measures the gap between the details ScrollViewer and the pane footer branding item (both
+    ///     relative to NavView) and sets MaxHeight to fill it. Deliberately measures against OTHER
+    ///     elements rather than the ScrollViewer's own ActualHeight/ActualWidth — a self-referencing
+    ///     size binding on this same element previously made the library's cover art vanish entirely,
+    ///     because the bound value can get stuck at 0 before the first layout pass resolves it.
+    /// </summary>
+    private void UpdateDetailsScrollViewerHeight()
+    {
+        try
+        {
+            var scrollViewerTop = DetailsScrollViewer.TransformToVisual(NavView)
+                .TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+            var footerTop = PaneFooterRoot.TransformToVisual(NavView)
+                .TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
+
+            var available = Math.Max(120, footerTop - scrollViewerTop - 12);
+
+            if (Math.Abs(available - _lastDetailsMaxHeight) > 0.5)
+            {
+                _lastDetailsMaxHeight = available;
+                DetailsScrollViewer.MaxHeight = available;
+            }
+        }
+        catch
+        {
+            // Layout hasn't settled yet (e.g. the panel is still Collapsed) — keep the current MaxHeight.
+        }
     }
 
     /// <summary>
@@ -178,14 +239,6 @@ public sealed partial class AppShell : Page
     }
 
     /// <summary>
-    ///     Invoked when the View Code button is clicked. Launches the repo on GitHub.
-    /// </summary>
-    private async void ViewCodeNavPaneButton_Tapped(object sender, TappedRoutedEventArgs e)
-    {
-        await Launcher.LaunchUriAsync(new Uri("https://github.com/rstewa/audibly"));
-    }
-
-    /// <summary>
     ///     Navigates the frame to the previous page.
     /// </summary>
     private void NavigationView_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
@@ -232,6 +285,22 @@ public sealed partial class AppShell : Page
         var count = ViewModel.Audiobooks.Count(a => a.IsSelected);
         if (await DialogService.ConfirmDeleteAudiobooksAsync(count))
             await ViewModel.DeleteSelectedAudiobooksAsync();
+    }
+
+    private bool _isDescriptionExpanded;
+
+    private void DescriptionToggleButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        _isDescriptionExpanded = !_isDescriptionExpanded;
+        DescriptionTextBlock.MaxLines = _isDescriptionExpanded ? 0 : 4;
+        DescriptionToggleText.Text = _isDescriptionExpanded ? "Show less" : "Show more";
+    }
+
+    private void ResetDescriptionExpand()
+    {
+        _isDescriptionExpanded = false;
+        DescriptionTextBlock.MaxLines = 4;
+        DescriptionToggleText.Text = "Show more";
     }
 
     #endregion

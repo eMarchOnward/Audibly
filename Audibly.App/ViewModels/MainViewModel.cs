@@ -617,7 +617,8 @@ public class MainViewModel : BindableBase
                 if (refreshed != null) vm.SetTagsFromDb(refreshed.Tags);
             }
 
-            var freshTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).ToList();
+            var freshTags = (await App.Repository.Audiobooks.GetAllTagsAsync())
+                .OrderBy(t => t.Name, AudiobookEditHelpers.TagNameComparer).ToList();
 
             await _dispatcherQueue.EnqueueAsync(() =>
             {
@@ -659,7 +660,8 @@ public class MainViewModel : BindableBase
             await _dispatcherQueue.EnqueueAsync(() => IsLoading = true);
 
             var audiobooks = (await App.Repository.Audiobooks.GetAsync()).AsList();
-            var tags = (await App.Repository.Audiobooks.GetAllTagsAsync()).ToList();
+            var tags = (await App.Repository.Audiobooks.GetAllTagsAsync())
+                .OrderBy(t => t.Name, AudiobookEditHelpers.TagNameComparer).ToList();
 
             await _dispatcherQueue.EnqueueAsync(() =>
             {

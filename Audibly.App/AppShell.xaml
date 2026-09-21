@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls"
+    xmlns:converters="using:Audibly.App.Helpers.Converters"
     xmlns:models="using:Audibly.Models"
     xmlns:muxc="using:Microsoft.UI.Xaml.Controls"
     xmlns:userControls="using:Audibly.App.UserControls"
@@ -15,6 +16,10 @@
     Loaded="AppShell_OnLoaded"
     TabNavigation="Cycle"
     mc:Ignorable="d">
+
+    <Page.Resources>
+        <converters:SecondsToTimeStringConverter x:Key="SecondsToTimeStringConverter" />
+    </Page.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -94,11 +99,14 @@
                         <!--  Gated on the pane being open (not just something being selected), so it's
                               hidden while collapsed and only appears once the pane is expanded.  -->
                         <ScrollViewer
+                            x:Name="DetailsScrollViewer"
+                            Margin="-20,0,-20,0"
+                            Padding="20,8,20,8"
                             MaxHeight="420"
                             VerticalScrollBarVisibility="Auto"
                             VerticalScrollMode="Auto"
                             Visibility="{x:Bind viewModels:Converters.CollapsedIfNot(ViewModel.HasAnySelected, NavView.IsPaneOpen), Mode=OneWay}">
-                            <StackPanel Margin="-20,0,-20,0" HorizontalAlignment="Stretch" Padding="20,8,20,8" Spacing="16">
+                            <StackPanel HorizontalAlignment="Stretch" Spacing="16">
 
                         <!--  One book selected  -->
                         <StackPanel Spacing="10" Visibility="{x:Bind ViewModel.HasSingleSelected, Mode=OneWay}">
@@ -108,14 +116,15 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
+                                <!--  A WinUI Border with CornerRadius clips its child, so this rounds the corners
+                                      without an ImageBrush — ImageBrush sources set while the element is Collapsed
+                                      (as this whole panel is until the pane is expanded) can fail to ever load.  -->
                                 <Border
                                     Grid.Column="0"
                                     Width="36"
                                     Height="36"
                                     CornerRadius="4">
-                                    <Border.Background>
-                                        <ImageBrush ImageSource="{x:Bind ViewModel.SingleSelectedAudiobook.ThumbnailPath, Mode=OneWay}" Stretch="UniformToFill" />
-                                    </Border.Background>
+                                    <Image Source="{x:Bind ViewModel.SingleSelectedAudiobook.ThumbnailPath, Mode=OneWay}" Stretch="UniformToFill" />
                                 </Border>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock
@@ -132,18 +141,43 @@
                                 </StackPanel>
                             </Grid>
 
+                            <StackPanel Orientation="Vertical" Spacing="2">
+                                <HyperlinkButton Click="DetailsEditBookButton_OnClick" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="13" Glyph="&#xE70F;" VerticalAlignment="Center" />
+                                        <TextBlock Text="Edit Book Details" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </HyperlinkButton>
+                                <HyperlinkButton Click="DetailsShowInFileExplorerButton_OnClick" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="13" Glyph="&#xEC50;" VerticalAlignment="Center" />
+                                        <TextBlock Text="Show in File Explorer" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </HyperlinkButton>
+                            </StackPanel>
+
                             <Grid ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="FORMAT" />
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="LENGTH" />
                                 <TextBlock
                                     Grid.Column="1"
                                     HorizontalAlignment="Right"
-                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.FormatDisplayText, Mode=OneWay}"
-                                    TextAlignment="Right"
-                                    TextWrapping="Wrap" />
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.Duration, Mode=OneWay, Converter={StaticResource SecondsToTimeStringConverter}}"
+                                    TextAlignment="Right" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="PROGRESS" />
+                                <TextBlock Grid.Column="1" HorizontalAlignment="Right" TextAlignment="Right">
+                                    <Run Text="{x:Bind ViewModel.SingleSelectedAudiobook.Progress, Mode=OneWay}" /><Run Text="%" />
+                                </TextBlock>
                             </Grid>
 
                             <Grid ColumnSpacing="8">
@@ -170,6 +204,20 @@
                                     Grid.Column="1"
                                     HorizontalAlignment="Right"
                                     Text="{x:Bind ViewModel.SingleSelectedAudiobook.LastPlayedDisplayText, Mode=OneWay}"
+                                    TextAlignment="Right"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="FORMAT" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.FormatDisplayText, Mode=OneWay}"
                                     TextAlignment="Right"
                                     TextWrapping="Wrap" />
                             </Grid>
@@ -216,16 +264,18 @@
                                 </ItemsControl>
                             </StackPanel>
 
-                            <Button
-                                Click="DetailsEditBookButton_OnClick"
-                                Content="Edit Book Details"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center" />
-                            <Button
-                                Click="DetailsShowInFileExplorerButton_OnClick"
-                                Content="Show in File Explorer"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center" />
+                            <StackPanel Spacing="4" Visibility="{x:Bind viewModels:Converters.CollapsedIfNullOrEmpty(ViewModel.SingleSelectedAudiobook.Description), Mode=OneWay}">
+                                <TextBlock Opacity="0.7" Style="{StaticResource CaptionTextBlockStyle}" Text="DESCRIPTION" />
+                                <TextBlock
+                                    x:Name="DescriptionTextBlock"
+                                    MaxLines="4"
+                                    Text="{x:Bind ViewModel.SingleSelectedAudiobook.Description, Mode=OneWay}"
+                                    TextTrimming="CharacterEllipsis"
+                                    TextWrapping="Wrap" />
+                                <HyperlinkButton Click="DescriptionToggleButton_OnClick" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Padding="0,2">
+                                    <TextBlock x:Name="DescriptionToggleText" Text="Show more" />
+                                </HyperlinkButton>
+                            </StackPanel>
                         </StackPanel>
 
                         <!--  Multiple books selected  -->
@@ -304,13 +354,14 @@
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
             <muxc:NavigationView.PaneFooter>
-                <StackPanel>
+                <StackPanel x:Name="PaneFooterRoot">
+                    <!--  Static branding label — "View code" moved to Settings > About.  -->
                     <muxc:NavigationViewItem
-                        Content="View code"
-                        Tapped="ViewCodeNavPaneButton_Tapped"
-                        ToolTipService.ToolTip="View code">
+                        Content="{x:Bind AppBrandingLabel}"
+                        SelectsOnInvoked="False"
+                        ToolTipService.ToolTip="{x:Bind AppBrandingLabel}">
                         <muxc:NavigationViewItem.Icon>
-                            <FontIcon Glyph="&#xE943;" />
+                            <ImageIcon Source="ms-appx:///Assets/logo.png" />
                         </muxc:NavigationViewItem.Icon>
                     </muxc:NavigationViewItem>
                 </StackPanel>

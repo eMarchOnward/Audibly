@@ -414,7 +414,7 @@ public static class DialogService
             // Map NormalizedName → Button so CollectionChanged can toggle visibility
             var tagButtons = new Dictionary<string, Button>();
             var tagStrip = new WrapPanel { HorizontalSpacing = 6, VerticalSpacing = 4 };
-            foreach (var tag in allTags.OrderBy(t => t.Name))
+            foreach (var tag in allTags.OrderBy(t => t.Name, AudiobookEditHelpers.TagNameComparer))
             {
                 var capturedTag = tag;
                 var alreadyAdded = pendingTags.Any(t => t.NormalizedName == tag.NormalizedName);
@@ -628,6 +628,70 @@ public static class DialogService
     }
 
     /// <summary>
+    ///     Prompts for a new name for the given tag (with a conflict check against existing tags)
+    ///     and, if confirmed, renames it everywhere it's used. Used by Settings' Tag Management.
+    /// </summary>
+    internal static async Task<bool> ShowRenameTagDialogAsync(Tag tag)
+    {
+        var xamlRoot = GetXamlRoot();
+        if (xamlRoot == null) return false;
+
+        var textBox = new TextBox { Text = tag.Name, PlaceholderText = "New tag name", MinWidth = 260 };
+        var dialog = new ContentDialog
+        {
+            Title = "Rename Tag",
+            Content = textBox,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = App.Window.Content.XamlRoot,
+            RequestedTheme = ThemeHelper.ActualTheme
+        };
+
+        if (await dialog.ShowOneAtATimeAsync() != ContentDialogResult.Primary) return false;
+
+        var newName = textBox.Text.Trim();
+        if (string.IsNullOrEmpty(newName) || newName == tag.Name) return false;
+
+        var normalizedNew = newName.ToLowerInvariant();
+        var conflict = ViewModel.AvailableTags.FirstOrDefault(t => t.NormalizedName == normalizedNew && t.Id != tag.Id);
+        if (conflict != null)
+        {
+            await ShowErrorDialogAsync("Name Already Exists", $"A tag named \"{conflict.Name}\" already exists.");
+            return false;
+        }
+
+        await ViewModel.RenameTagAsync(tag, newName);
+        return true;
+    }
+
+    /// <summary>
+    ///     Confirms and, if accepted, deletes the given tag from every audiobook that has it.
+    ///     Used by Settings' Tag Management.
+    /// </summary>
+    internal static async Task<bool> ConfirmDeleteTagAsync(Tag tag)
+    {
+        var xamlRoot = GetXamlRoot();
+        if (xamlRoot == null) return false;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Remove Tag",
+            Content = $"Remove \"{tag.Name}\"? This tag will be removed from all audiobooks.",
+            PrimaryButtonText = "Remove",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = App.Window.Content.XamlRoot,
+            RequestedTheme = ThemeHelper.ActualTheme
+        };
+
+        if (await dialog.ShowOneAtATimeAsync() != ContentDialogResult.Primary) return false;
+
+        await ViewModel.DeleteTagAsync(tag);
+        return true;
+    }
+
+    /// <summary>
     ///     Confirms and, if accepted, permanently deletes the given audiobooks.
     /// </summary>
     internal static async Task<bool> ConfirmDeleteAudiobooksAsync(int count)
@@ -659,7 +723,8 @@ public static class DialogService
         var xamlRoot = GetXamlRoot();
         if (xamlRoot == null || selectedAudiobooks.Count == 0) return;
 
-        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync()).OrderBy(t => t.Name).ToList();
+        var allTags = (await App.Repository.Audiobooks.GetAllTagsAsync())
+            .OrderBy(t => t.Name, AudiobookEditHelpers.TagNameComparer).ToList();
 
         var pendingAddTags = new ObservableCollection<Tag>();
         var pendingRemoveTags = new ObservableCollection<Tag>();
